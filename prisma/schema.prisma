@@ -1,0 +1,127 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  role      String   // "ADMIN" or "GURU"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Guru {
+  id            String           @id @default(uuid())
+  userId        String?          @unique
+  nama          String
+  NIP           String           @unique
+  NIK           String           @unique
+  jenisKelamin  String           // "L" or "P"
+  tempatLahir   String
+  tanggalLahir  String           // YYYY-MM-DD
+  alamat        String
+  noHP          String
+  email         String           @unique
+  jabatan       String
+  mataPelajaran String
+  status        String           // "AKTIF" or "NON_AKTIF"
+  foto          String?          // URL or Base64 string
+  faceID        String?          // Unique Face Identifier
+  qrCode        String?          // QR Code string or URL
+  password      String           // Password to login as Guru
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  embeddings    FaceEmbedding[]
+  attendances   Attendance[]
+}
+
+model FaceEmbedding {
+  id         String   @id @default(uuid())
+  guruId     String
+  guru       Guru     @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  expression String   // "Normal", "Senyum", "Menoleh Kiri", "Menoleh Kanan", "Sedikit Atas", "Sedikit Bawah", "Kedip", etc.
+  embedding  String   // Stringified JSON array of 128 numbers
+  createdAt  DateTime @default(now())
+}
+
+model Attendance {
+  id         String   @id @default(uuid())
+  guruId     String
+  guru       Guru     @relation(fields: [guruId], references: [id], onDelete: Cascade)
+  date       String   // YYYY-MM-DD
+  jamMasuk   String?  // HH:MM:SS
+  jamPulang  String?  // HH:MM:SS
+  latitude   Float?
+  longitude  Float?
+  alamat     String?
+  ip         String?
+  device     String?
+  browser    String?
+  selfie     String?  // URL or Base64 photo
+  status     String   // "HADIR", "TERLAMBAT", "IZIN", "SAKIT", "ALPHA", "PULANG"
+  createdAt  DateTime @default(now())
+}
+
+model School {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  logo      String?  // Base64 or URL
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Schedule {
+  id            String   @id @default(uuid())
+  name          String   @default("Jadwal Utama")
+  jamMasuk      String   // HH:MM (e.g. "07:00")
+  jamPulang     String   // HH:MM (e.g. "14:00")
+  hariKerja     String   // Comma-separated (e.g. "Senin,Selasa,Rabu,Kamis,Jumat")
+  jamToleransi  Int      // in minutes (e.g. 15)
+  timezone      String   @default("WIT") // Timezone (WIB, WITA, WIT)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Location {
+  id        String   @id @default(uuid())
+  name      String   @default("Lokasi Sekolah")
+  latitude  Float
+  longitude Float
+  radius    Float    // in meters (e.g. 100.0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Settings {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  type        String   // "SUCCESS", "WARNING", "INFO"
+  read        Boolean  @default(false)
+  recipientId String   // Guru NIP, NIK, email, or "ADMIN"
+  createdAt   DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?  // Email or name of executor
+  action    String   // e.g. "LOGIN", "REGISTER_FACE", "CRUD_GURU"
+  details   String
+  ip        String?
+  createdAt DateTime @default(now())
+}

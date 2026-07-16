@@ -1,0 +1,6 @@
+{
+  "name": "Smart Attendance Guru",
+  "description": "A full-stack smart attendance system for teachers using face recognition and GPS validation.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
