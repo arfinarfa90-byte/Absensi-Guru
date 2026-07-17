@@ -1,4 +1,5 @@
 // Client-side API request wrapper for Smart Attendance Guru
+import * as XLSX from "xlsx";
 
 const BASE_URL = "/api";
 
@@ -14,7 +15,695 @@ export function removeAuthToken() {
   localStorage.removeItem("attendance_guru_token");
 }
 
+// Helper to seed initial mock data for offline fallback (GitHub Pages, Vercel, etc.)
+function initMockData() {
+  if (!localStorage.getItem("_mock_school")) {
+    localStorage.setItem("_mock_school", JSON.stringify({
+      id: "school-1",
+      name: "SMK Negeri 1 Jayapura",
+      address: "Jl. Pendidikan No. 45, Jayapura, Papua",
+      email: "info@smkn1jayapura.sch.id",
+      phone: "081122334455",
+      website: "smkn1jayapura.sch.id"
+    }));
+  }
+  if (!localStorage.getItem("_mock_schedule")) {
+    localStorage.setItem("_mock_schedule", JSON.stringify({
+      id: "schedule-1",
+      name: "Jadwal Kerja Standard Guru",
+      jamMasuk: "07:00",
+      jamPulang: "14:30",
+      hariKerja: "Senin,Selasa,Rabu,Kamis,Jumat",
+      jamToleransi: 15,
+      timezone: "WIT"
+    }));
+  }
+  if (!localStorage.getItem("_mock_location")) {
+    localStorage.setItem("_mock_location", JSON.stringify({
+      id: "loc-1",
+      name: "SMK Negeri 1 Jayapura",
+      latitude: -2.5488,
+      longitude: 140.7012,
+      radius: 100
+    }));
+  }
+  if (!localStorage.getItem("_mock_gurus")) {
+    localStorage.setItem("_mock_gurus", JSON.stringify([
+      {
+        id: "guru-1",
+        NIP: "198005122010011003",
+        nama: "Drs. Budi Santoso",
+        email: "budi@smkn1jayapura.sch.id",
+        mataPelajaran: "Matematika",
+        telepon: "081234567890",
+        status: true,
+        userId: "user-guru-1"
+      },
+      {
+        id: "guru-2",
+        NIP: "198509202015022001",
+        nama: "Siti Aminah, S.Pd.",
+        email: "siti@smkn1jayapura.sch.id",
+        mataPelajaran: "Bahasa Indonesia",
+        telepon: "081298765432",
+        status: true,
+        userId: "user-guru-2"
+      }
+    ]));
+  }
+  if (!localStorage.getItem("_mock_users")) {
+    localStorage.setItem("_mock_users", JSON.stringify([
+      {
+        id: "admin-1",
+        email: "arfinarfa90@guru.smk.belajar.id",
+        name: "Administrator (Uji Coba)",
+        role: "ADMIN"
+      },
+      {
+        id: "user-guru-1",
+        email: "budi@smkn1jayapura.sch.id",
+        name: "Drs. Budi Santoso",
+        role: "GURU"
+      },
+      {
+        id: "user-guru-2",
+        email: "siti@smkn1jayapura.sch.id",
+        name: "Siti Aminah, S.Pd.",
+        role: "GURU"
+      }
+    ]));
+  }
+  if (!localStorage.getItem("_mock_attendances")) {
+    const list: any[] = [];
+    const statuses = ["HADIR", "TERLAMBAT", "HADIR", "IZIN", "HADIR", "HADIR", "HADIR"];
+    const dates: string[] = [];
+    
+    // Generate dates for past 7 days
+    for (let i = 7; i >= 1; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().split("T")[0]);
+    }
+
+    dates.forEach((dateStr, idx) => {
+      const dayOfWeek = new Date(dateStr).getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip weekends
+        const st = statuses[idx % statuses.length];
+        list.push({
+          id: `att-mock-1-${idx}`,
+          date: dateStr,
+          jamMasuk: st === "HADIR" ? "06:54:12" : st === "TERLAMBAT" ? "07:23:45" : null,
+          jamPulang: st === "HADIR" || st === "TERLAMBAT" ? "14:35:10" : null,
+          status: st,
+          alamat: "Dalam Area Sekolah (Mock)",
+          guruId: "guru-1"
+        });
+        list.push({
+          id: `att-mock-2-${idx}`,
+          date: dateStr,
+          jamMasuk: "06:50:00",
+          jamPulang: "14:30:00",
+          status: "HADIR",
+          alamat: "Dalam Area Sekolah (Mock)",
+          guruId: "guru-2"
+        });
+      }
+    });
+
+    localStorage.setItem("_mock_attendances", JSON.stringify(list));
+  }
+}
+
+// Full client-side offline mock server
+export async function mockFetch(endpoint: string, options: RequestInit = {}) {
+  initMockData();
+
+  // Helper to parse query params
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = new URL(cleanEndpoint, "http://localhost");
+  const path = url.pathname;
+  const searchParams = url.searchParams;
+
+  const method = (options.method || "GET").toUpperCase();
+  const body = options.body ? JSON.parse(options.body as string) : null;
+
+  // Retrieve mock DB tables
+  const getTable = (key: string) => JSON.parse(localStorage.getItem(key) || "[]");
+  const saveTable = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
+
+  const getSingleObj = (key: string) => JSON.parse(localStorage.getItem(key) || "{}");
+  const saveSingleObj = (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data));
+
+  // Simulate minimal server-side network lag (150ms)
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  // Helper: check auth token and return current mock user
+  const getCurrentUser = () => {
+    const token = getAuthToken();
+    if (!token) return null;
+    if (token === "mock-token-admin-1") {
+      return { id: "admin-1", email: "arfinarfa90@guru.smk.belajar.id", name: "Administrator (Uji Coba)", role: "ADMIN" };
+    }
+    if (token.startsWith("mock-token-")) {
+      const userId = token.replace("mock-token-", "");
+      const users = getTable("_mock_users");
+      return users.find((u: any) => u.id === userId) || null;
+    }
+    return null;
+  };
+
+  // --- 1. LOGIN ---
+  if (path === "/auth/login" && method === "POST") {
+    const { email, password } = body;
+    if (email === "arfinarfa90@guru.smk.belajar.id" && password === "admin123") {
+      const user = { id: "admin-1", email, name: "Administrator (Uji Coba)", role: "ADMIN" };
+      return { token: "mock-token-admin-1", user };
+    }
+    
+    const users = getTable("_mock_users");
+    const user = users.find((u: any) => u.email === email);
+    if (user) {
+      return { token: "mock-token-" + user.id, user };
+    }
+
+    throw new Error("Email atau password tidak terdaftar di sistem.");
+  }
+
+  // --- 2. AUTH ME ---
+  if (path === "/auth/me" && method === "GET") {
+    const user = getCurrentUser();
+    if (!user) {
+      throw new Error("Access token is missing or expired (Mock)");
+    }
+    return user;
+  }
+
+  // --- 3. SCHOOL INFO ---
+  if (path === "/school") {
+    if (method === "GET") {
+      return getSingleObj("_mock_school");
+    }
+    if (method === "PUT") {
+      const school = { ...getSingleObj("_mock_school"), ...body };
+      saveSingleObj("_mock_school", school);
+      return school;
+    }
+  }
+
+  // --- 4. SCHEDULE ---
+  if (path === "/schedule") {
+    if (method === "GET") {
+      return getSingleObj("_mock_schedule");
+    }
+    if (method === "PUT") {
+      const schedule = { ...getSingleObj("_mock_schedule"), ...body };
+      saveSingleObj("_mock_schedule", schedule);
+      return schedule;
+    }
+  }
+
+  // --- 5. LOCATION ---
+  if (path === "/location") {
+    if (method === "GET") {
+      return getSingleObj("_mock_location");
+    }
+    if (method === "PUT") {
+      const location = { ...getSingleObj("_mock_location"), ...body };
+      saveSingleObj("_mock_location", location);
+      return location;
+    }
+  }
+
+  // --- 6. GURU ---
+  if (path === "/guru") {
+    if (method === "GET") {
+      const search = searchParams.get("search")?.toLowerCase() || "";
+      const statusFilter = searchParams.get("status") || "semua";
+      let gurus = getTable("_mock_gurus");
+
+      if (search) {
+        gurus = gurus.filter((g: any) => 
+          g.nama.toLowerCase().includes(search) || 
+          g.NIP.toLowerCase().includes(search) ||
+          (g.mataPelajaran && g.mataPelajaran.toLowerCase().includes(search))
+        );
+      }
+
+      if (statusFilter !== "semua") {
+        const targetStatus = statusFilter === "aktif";
+        gurus = gurus.filter((g: any) => g.status === targetStatus);
+      }
+
+      return gurus;
+    }
+
+    if (method === "POST") {
+      const { NIP, nama, email, mataPelajaran, telepon } = body;
+      const gurus = getTable("_mock_gurus");
+      const users = getTable("_mock_users");
+
+      if (gurus.some((g: any) => g.NIP === NIP)) {
+        throw new Error("NIP guru sudah terdaftar.");
+      }
+      if (gurus.some((g: any) => g.email === email)) {
+        throw new Error("Email guru sudah terdaftar.");
+      }
+
+      const id = "guru-" + Date.now();
+      const userId = "user-" + id;
+
+      const newGuru = {
+        id,
+        NIP,
+        nama,
+        email,
+        mataPelajaran,
+        telepon,
+        status: true,
+        userId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const newUser = {
+        id: userId,
+        email,
+        name: nama,
+        role: "GURU"
+      };
+
+      gurus.push(newGuru);
+      users.push(newUser);
+
+      saveTable("_mock_gurus", gurus);
+      saveTable("_mock_users", users);
+
+      return newGuru;
+    }
+  }
+
+  // Handle specific guru actions like status, reset, delete
+  if (path.startsWith("/guru/")) {
+    const parts = path.split("/");
+    const id = parts[2];
+    const subAction = parts[3];
+
+    const gurus = getTable("_mock_gurus");
+    const users = getTable("_mock_users");
+
+    const guruIdx = gurus.findIndex((g: any) => g.id === id);
+
+    if (method === "DELETE") {
+      if (guruIdx > -1) {
+        const deleted = gurus.splice(guruIdx, 1)[0];
+        const userIdx = users.findIndex((u: any) => u.id === deleted.userId);
+        if (userIdx > -1) {
+          users.splice(userIdx, 1);
+        }
+        saveTable("_mock_gurus", gurus);
+        saveTable("_mock_users", users);
+        return { success: true };
+      }
+      throw new Error("Guru tidak ditemukan.");
+    }
+
+    if (method === "PUT" && subAction === "status") {
+      const { status } = body;
+      if (guruIdx > -1) {
+        gurus[guruIdx].status = status;
+        saveTable("_mock_gurus", gurus);
+        return gurus[guruIdx];
+      }
+      throw new Error("Guru tidak ditemukan.");
+    }
+
+    if (method === "PUT" && !subAction) { // update guru
+      const { NIP, nama, email, mataPelajaran, telepon } = body;
+      if (guruIdx > -1) {
+        gurus[guruIdx] = { ...gurus[guruIdx], NIP, nama, email, mataPelajaran, telepon };
+        
+        // update corresponding user name / email
+        const userIdx = users.findIndex((u: any) => u.id === gurus[guruIdx].userId);
+        if (userIdx > -1) {
+          users[userIdx].name = nama;
+          users[userIdx].email = email;
+        }
+
+        saveTable("_mock_gurus", gurus);
+        saveTable("_mock_users", users);
+        return gurus[guruIdx];
+      }
+      throw new Error("Guru tidak ditemukan.");
+    }
+
+    if (method === "POST" && subAction === "reset-password") {
+      return { success: true, message: "Password berhasil di-reset ke standar." };
+    }
+
+    if (method === "POST" && subAction === "reset-face") {
+      return { success: true, message: "Pendaftaran wajah berhasil di-reset." };
+    }
+
+    if (method === "POST" && subAction === "register-face") {
+      return { success: true, message: "Pendaftaran wajah berhasil didaftarkan." };
+    }
+  }
+
+  // --- 7. ATTENDANCE ---
+  if (path === "/attendance") {
+    if (method === "GET") {
+      const search = searchParams.get("search")?.toLowerCase() || "";
+      const statusFilter = searchParams.get("status") || "";
+      const filterDate = searchParams.get("date") || "";
+      const filterMonth = searchParams.get("month") || "";
+      const filterYear = searchParams.get("year") || "";
+
+      let list = getTable("_mock_attendances");
+      const gurus = getTable("_mock_gurus");
+
+      // Join guru details
+      list = list.map((log: any) => {
+        const g = gurus.find((guru: any) => guru.id === log.guruId);
+        return { ...log, guru: g };
+      });
+
+      // Filters
+      if (search) {
+        list = list.filter((log: any) => 
+          log.guru?.nama?.toLowerCase().includes(search) || 
+          log.guru?.NIP?.toLowerCase().includes(search)
+        );
+      }
+      if (statusFilter) {
+        list = list.filter((log: any) => log.status === statusFilter);
+      }
+      if (filterDate) {
+        list = list.filter((log: any) => log.date === filterDate);
+      }
+      if (filterMonth) {
+        list = list.filter((log: any) => {
+          const parts = log.date.split("-"); // YYYY-MM-DD
+          return parseInt(parts[1], 10) === parseInt(filterMonth, 10);
+        });
+      }
+      if (filterYear) {
+        list = list.filter((log: any) => {
+          const parts = log.date.split("-");
+          return parseInt(parts[0], 10) === parseInt(filterYear, 10);
+        });
+      }
+
+      // Sort newest date and newest time
+      list.sort((a: any, b: any) => {
+        const dDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dDiff !== 0) return dDiff;
+        return (b.jamMasuk || "").localeCompare(a.jamMasuk || "");
+      });
+
+      return list;
+    }
+  }
+
+  // Manual Attendance Create
+  if (path === "/attendance/manual" && method === "POST") {
+    const { guruId, date, status, jamMasuk, jamPulang, keterangan } = body;
+    const list = getTable("_mock_attendances");
+    const id = "att-manual-" + Date.now();
+
+    const newLog = {
+      id,
+      date,
+      status,
+      jamMasuk: jamMasuk || null,
+      jamPulang: jamPulang || null,
+      alamat: keterangan || "Dibuat secara Manual oleh Admin",
+      guruId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    list.push(newLog);
+    saveTable("_mock_attendances", list);
+    return newLog;
+  }
+
+  // Submit Real-time Attendance via Camera/GPS
+  if (path === "/attendance/submit" && method === "POST") {
+    const { type, foto } = body;
+    const curUser = getCurrentUser();
+    if (!curUser) throw new Error("Anda tidak terautentikasi.");
+
+    const gurus = getTable("_mock_gurus");
+    const guru = gurus.find((g: any) => g.userId === curUser.id);
+    if (!guru) throw new Error("Profil guru tidak ditemukan untuk akun ini.");
+
+    const schedule = getSingleObj("_mock_schedule");
+    const tz = schedule.timezone || "WIT";
+    let ianaTz = "Asia/Jayapura";
+    if (tz === "WIB") ianaTz = "Asia/Jakarta";
+    else if (tz === "WITA") ianaTz = "Asia/Makassar";
+
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("en-CA", { timeZone: ianaTz });
+    const timeStr = now.toLocaleTimeString("en-GB", { timeZone: ianaTz, hour12: false });
+
+    const list = getTable("_mock_attendances");
+
+    if (type === "masuk") {
+      const alreadyCheckedIn = list.some((l: any) => l.guruId === guru.id && l.date === dateStr);
+      if (alreadyCheckedIn) {
+        throw new Error("Anda sudah melakukan absensi Masuk hari ini.");
+      }
+
+      // Check attendance status based on entry schedule and toleransi
+      let finalStatus = "HADIR";
+      const [nowH, nowM] = timeStr.split(":").map(Number);
+      const [schH, schM] = (schedule.jamMasuk || "07:00").split(":").map(Number);
+      const nowMinutes = nowH * 60 + nowM;
+      const schMinutes = schH * 60 + schM;
+      const lateThreshold = schMinutes + (schedule.jamToleransi || 15);
+
+      if (nowMinutes > lateThreshold) {
+        finalStatus = "TERLAMBAT";
+      }
+
+      const newLog = {
+        id: "att-submit-" + Date.now(),
+        date: dateStr,
+        jamMasuk: timeStr,
+        jamPulang: null,
+        status: finalStatus,
+        alamat: "Dalam Area Sekolah (Satelit GPS)",
+        fotoMasuk: foto || null,
+        guruId: guru.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      list.push(newLog);
+      saveTable("_mock_attendances", list);
+      return newLog;
+    } else if (type === "pulang") {
+      const existingLogIdx = list.findIndex((l: any) => l.guruId === guru.id && l.date === dateStr);
+      if (existingLogIdx === -1) {
+        throw new Error("Anda belum melakukan absensi Masuk hari ini.");
+      }
+
+      const log = list[existingLogIdx];
+      if (log.jamPulang) {
+        throw new Error("Anda sudah melakukan absensi Pulang hari ini.");
+      }
+
+      log.jamPulang = timeStr;
+      log.fotoPulang = foto || null;
+      log.updatedAt = new Date().toISOString();
+
+      list[existingLogIdx] = log;
+      saveTable("_mock_attendances", list);
+      return log;
+    }
+
+    throw new Error("Tipe absensi tidak valid.");
+  }
+
+  // --- 8. STATS ADMIN ---
+  if (path === "/stats/admin" && method === "GET") {
+    const gurus = getTable("_mock_gurus").filter((g: any) => g.status === true);
+    const list = getTable("_mock_attendances");
+
+    const schedule = getSingleObj("_mock_schedule");
+    const tz = schedule.timezone || "WIT";
+    let ianaTz = "Asia/Jayapura";
+    if (tz === "WIB") ianaTz = "Asia/Jakarta";
+    else if (tz === "WITA") ianaTz = "Asia/Makassar";
+
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: ianaTz });
+    const currentMonthStr = todayStr.substring(0, 7); // YYYY-MM
+
+    const todayLogs = list.filter((l: any) => l.date === todayStr);
+
+    let guruHadirHariIni = 0;
+    let guruTerlambatHariIni = 0;
+    let guruIzinHariIni = 0;
+    let guruSakitHariIni = 0;
+
+    todayLogs.forEach((log: any) => {
+      if (log.status === "HADIR") guruHadirHariIni++;
+      else if (log.status === "TERLAMBAT") guruTerlambatHariIni++;
+      else if (log.status === "IZIN") guruIzinHariIni++;
+      else if (log.status === "SAKIT") guruSakitHariIni++;
+    });
+
+    const activeGurus = gurus.length;
+    const totalAbsenHariIni = todayLogs.length;
+    const belumAbsenHariIni = Math.max(0, activeGurus - totalAbsenHariIni);
+
+    const totalAbsensiBulanIni = list.filter((l: any) => l.date.startsWith(currentMonthStr)).length;
+
+    // Weekly trend
+    const last7Days: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      last7Days.push(d.toISOString().split("T")[0]);
+    }
+
+    const weeklyAttendance = last7Days.map((dayStr) => {
+      const dayLogs = list.filter((l: any) => l.date === dayStr);
+      let hadir = 0;
+      let terlambat = 0;
+      dayLogs.forEach((c: any) => {
+        if (c.status === "HADIR") hadir++;
+        if (c.status === "TERLAMBAT") terlambat++;
+      });
+      return { date: dayStr, hadir, terlambat };
+    });
+
+    const monthlyAttendance = [
+      { month: "Feb 2026", rate: 88 },
+      { month: "Mar 2026", rate: 92 },
+      { month: "Apr 2026", rate: 91 },
+      { month: "May 2026", rate: 95 },
+      { month: "Jun 2026", rate: 94 },
+      { month: "Jul 2026", rate: 96 },
+    ];
+
+    // Top late & diligent
+    const lateMap: Record<string, any> = {};
+    const allLate = list.filter((l: any) => l.status === "TERLAMBAT");
+    allLate.forEach((l: any) => {
+      const g = gurus.find((g: any) => g.id === l.guruId);
+      if (g) {
+        if (!lateMap[l.guruId]) {
+          lateMap[l.guruId] = { nama: g.nama, NIP: g.NIP, count: 0 };
+        }
+        lateMap[l.guruId].count++;
+      }
+    });
+    const terlambatTerbanyak = Object.values(lateMap).sort((a: any, b: any) => b.count - a.count).slice(0, 5);
+
+    const presenceMap: Record<string, any> = {};
+    list.forEach((l: any) => {
+      const g = gurus.find((g: any) => g.id === l.guruId);
+      if (g) {
+        if (!presenceMap[l.guruId]) {
+          presenceMap[l.guruId] = { nama: g.nama, NIP: g.NIP, present: 0, total: 0 };
+        }
+        presenceMap[l.guruId].total++;
+        if (l.status === "HADIR" || l.status === "TERLAMBAT") {
+          presenceMap[l.guruId].present++;
+        }
+      }
+    });
+    const palingRajin = Object.values(presenceMap).map((item: any) => ({
+      nama: item.nama,
+      NIP: item.NIP,
+      rate: item.total > 0 ? Math.round((item.present / item.total) * 100) : 0
+    })).sort((a: any, b: any) => b.rate - a.rate).slice(0, 5);
+
+    const aktivitasTerbaru = [
+      { id: "act-1", email: "arfinarfa90@guru.smk.belajar.id", action: "LOGIN", details: "Admin masuk ke sistem panel pengawas (Mock Mode).", createdAt: new Date().toISOString() }
+    ];
+
+    return {
+      totalGuru: activeGurus,
+      guruHadirHariIni,
+      guruTerlambatHariIni,
+      guruIzinHariIni,
+      guruSakitHariIni,
+      belumAbsenHariIni,
+      totalAbsensiBulanIni,
+      weeklyAttendance,
+      monthlyAttendance,
+      terlambatTerbanyak,
+      palingRajin,
+      aktivitasTerbaru
+    };
+  }
+
+  // --- 9. STATS GURU ---
+  if (path === "/stats/guru" && method === "GET") {
+    const curUser = getCurrentUser();
+    if (!curUser) throw new Error("Anda tidak terautentikasi.");
+
+    const gurus = getTable("_mock_gurus");
+    const guru = gurus.find((g: any) => g.userId === curUser.id);
+    if (!guru) throw new Error("Profil guru tidak ditemukan.");
+
+    const list = getTable("_mock_attendances");
+    const schedule = getSingleObj("_mock_schedule");
+    const tz = schedule.timezone || "WIT";
+    let ianaTz = "Asia/Jayapura";
+    if (tz === "WIB") ianaTz = "Asia/Jakarta";
+    else if (tz === "WITA") ianaTz = "Asia/Makassar";
+
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: ianaTz });
+    const todayLog = list.find((l: any) => l.guruId === guru.id && l.date === todayStr);
+
+    const personalLogs = list.filter((l: any) => l.guruId === guru.id);
+
+    const totalLogs = personalLogs.length;
+    const totalPresent = personalLogs.filter((l: any) => l.status === "HADIR" || l.status === "TERLAMBAT").length;
+    const persentaseHadir = totalLogs > 0 ? Math.round((totalPresent / totalLogs) * 100) : 100;
+
+    const jumlahTerlambat = personalLogs.filter((l: any) => l.status === "TERLAMBAT").length;
+    const jumlahSakit = personalLogs.filter((l: any) => l.status === "SAKIT").length;
+    const jumlahIzin = personalLogs.filter((l: any) => l.status === "IZIN").length;
+
+    const history7Days = personalLogs.slice(0, 7).map((log: any) => ({
+      date: log.date,
+      status: log.status,
+      jamMasuk: log.jamMasuk || "--:--:--",
+      jamPulang: log.jamPulang || "--:--:--"
+    }));
+
+    return {
+      jamMasuk: schedule.jamMasuk || "07:00",
+      jamPulang: schedule.jamPulang || "14:30",
+      statusHariIni: todayLog ? todayLog.status : "BELUM ABSEN",
+      absensiMasukCatat: todayLog?.jamMasuk || "--:--:--",
+      absensiPulangCatat: todayLog?.jamPulang || "--:--:--",
+      persentaseHadir,
+      jumlahTerlambat,
+      jumlahSakit,
+      jumlahIzin,
+      history7Days
+    };
+  }
+
+  throw new Error(`Endpoint mock ${method} ${path} belum diimplementasikan.`);
+}
+
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+  // Always trigger client-side fallback if hosted on frontend-only environments like GitHub Pages or Vercel
+  const isFrontendPlatform = window.location.hostname.includes("github.io") || 
+                             window.location.hostname.includes("vercel.app");
+
+  if (isFrontendPlatform) {
+    console.info(`[Switch API] Berjalan di platform statis (${window.location.hostname}). Beralih otomatis ke Offline Mock DB.`);
+    return mockFetch(endpoint, options);
+  }
+
   const token = getAuthToken();
   const headers = {
     "Content-Type": "application/json",
@@ -22,15 +711,29 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  try {
+    const response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+    if (!response.ok) {
+      // If it returned 404 (endpoint not found) and we can fallback to mock
+      if (response.status === 404) {
+        console.warn(`[Switch API] Endpoint ${endpoint} tidak ditemukan (404). Mencoba beralih ke Mock.`);
+        return mockFetch(endpoint, options);
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Request failed with status ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (err: any) {
+    // If it's a connection / network error, transparently fall back to client-side localStorage mock DB
+    if (err instanceof TypeError || err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
+      console.warn(`[Switch API] Koneksi backend gagal. Menjalankan fallback database lokal (Mock).`);
+      return mockFetch(endpoint, options);
+    }
+    throw err;
   }
-
-  return response.json();
 }
