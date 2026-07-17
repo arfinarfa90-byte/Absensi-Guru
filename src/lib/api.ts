@@ -1,8 +1,6 @@
 // Client-side API request wrapper for Smart Attendance Guru
 import * as XLSX from "xlsx";
 
-const BASE_URL = "/api";
-
 export const isFrontendPlatform = typeof window !== "undefined" && (
   window.location.hostname.includes("github.io") || 
   window.location.hostname.includes("vercel.app") ||
@@ -11,6 +9,36 @@ export const isFrontendPlatform = typeof window !== "undefined" && (
    !window.location.hostname.includes("localhost") && 
    !window.location.hostname.includes("127.0.0.1"))
 );
+
+export const getBaseUrl = () => {
+  const metaEnv = (import.meta as any).env;
+  if (metaEnv && metaEnv.VITE_API_URL) {
+    return metaEnv.VITE_API_URL;
+  }
+  
+  // Dynamic production URL of the deployed Cloud Run container
+  const CLOUD_RUN_URL = "https://ais-pre-desns7ivcyf2oafn6gd4tv-432802410429.asia-southeast1.run.app";
+  
+  // If we are on a static platform (Vercel, GitHub Pages) and there is no custom API URL,
+  // we use the live Cloud Run backend instead of offline Mock DB, so data is persistent across devices!
+  if (isFrontendPlatform) {
+    return `${CLOUD_RUN_URL}/api`;
+  }
+  return "/api";
+};
+
+const BASE_URL = getBaseUrl();
+
+export const getActiveDatabaseMode = () => {
+  const activeUrl = getBaseUrl();
+  if (activeUrl.startsWith("http")) {
+    return "Cloud Sync";
+  }
+  if (isFrontendPlatform) {
+    return "Local Mock DB";
+  }
+  return "Cloud Server";
+};
 
 export function getAuthToken(): string | null {
   return localStorage.getItem("attendance_guru_token");
@@ -764,12 +792,6 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 }
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  // Always trigger client-side fallback if hosted on frontend-only environments like GitHub Pages or Vercel
-  if (isFrontendPlatform) {
-    console.info(`[Switch API] Berjalan di platform statis (${window.location.hostname}). Beralih otomatis ke Offline Mock DB.`);
-    return mockFetch(endpoint, options);
-  }
-
   const token = getAuthToken();
   const headers = {
     "Content-Type": "application/json",
