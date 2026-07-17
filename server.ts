@@ -115,12 +115,12 @@ async function seedDatabase() {
       // Seed user specified email
       await prisma.user.create({
         data: {
-          email: "arfinarfa90@guru.smk.belajar.id",
+          email: "hasanlek486@gmail.com",
           password: hashedAdminPassword,
           role: "ADMIN",
         },
       });
-      console.log(" seeded default administrator account: arfinarfa90@guru.smk.belajar.id / admin123");
+      console.log(" seeded default administrator account: hasanlek486@gmail.com / admin123");
     }
   } catch (err) {
     console.error("Error seeding database:", err);

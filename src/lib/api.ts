@@ -75,7 +75,7 @@ function initMockData() {
     localStorage.setItem("_mock_users", JSON.stringify([
       {
         id: "admin-1",
-        email: "arfinarfa90@guru.smk.belajar.id",
+        email: "hasanlek486@gmail.com",
         name: "Administrator (Uji Coba)",
         role: "ADMIN"
       },
@@ -162,7 +162,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     const token = getAuthToken();
     if (!token) return null;
     if (token === "mock-token-admin-1") {
-      return { id: "admin-1", email: "arfinarfa90@guru.smk.belajar.id", name: "Administrator (Uji Coba)", role: "ADMIN" };
+      return { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator (Uji Coba)", role: "ADMIN" };
     }
     if (token.startsWith("mock-token-")) {
       const userId = token.replace("mock-token-", "");
@@ -177,8 +177,8 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     const emailLower = (body.email || "").trim().toLowerCase();
     const passwordTrimmed = (body.password || "").trim();
 
-    if (emailLower === "arfinarfa90@guru.smk.belajar.id" && passwordTrimmed === "admin123") {
-      const user = { id: "admin-1", email: "arfinarfa90@guru.smk.belajar.id", name: "Administrator (Uji Coba)", role: "ADMIN" };
+    if (emailLower === "hasanlek486@gmail.com" && passwordTrimmed === "admin123") {
+      const user = { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator (Uji Coba)", role: "ADMIN" };
       return { token: "mock-token-admin-1", user };
     }
     
@@ -625,7 +625,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     })).sort((a: any, b: any) => b.rate - a.rate).slice(0, 5);
 
     const aktivitasTerbaru = [
-      { id: "act-1", email: "arfinarfa90@guru.smk.belajar.id", action: "LOGIN", details: "Admin masuk ke sistem panel pengawas (Mock Mode).", createdAt: new Date().toISOString() }
+      { id: "act-1", email: "hasanlek486@gmail.com", action: "LOGIN", details: "Admin masuk ke sistem panel pengawas (Mock Mode).", createdAt: new Date().toISOString() }
     ];
 
     return {

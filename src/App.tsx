@@ -246,7 +246,7 @@ export default function App() {
             <span className="text-[10px] text-slate-500 uppercase block font-semibold">Demo Akun Uji Coba:</span>
             <div className="space-y-1">
               <p className="text-[10px] text-teal-400 font-mono">
-                Admin: arfinarfa90@guru.smk.belajar.id / admin123
+                Admin: hasanlek486@gmail.com / admin123
               </p>
               <p className="text-[10px] text-indigo-400 font-mono">
                 Guru: budi@smkn1jayapura.sch.id / guru123
