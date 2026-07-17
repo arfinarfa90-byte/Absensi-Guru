@@ -174,15 +174,18 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 
   // --- 1. LOGIN ---
   if (path === "/auth/login" && method === "POST") {
-    const { email, password } = body;
-    if (email === "arfinarfa90@guru.smk.belajar.id" && password === "admin123") {
-      const user = { id: "admin-1", email, name: "Administrator (Uji Coba)", role: "ADMIN" };
+    const emailLower = (body.email || "").trim().toLowerCase();
+    const passwordTrimmed = (body.password || "").trim();
+
+    if (emailLower === "arfinarfa90@guru.smk.belajar.id" && passwordTrimmed === "admin123") {
+      const user = { id: "admin-1", email: "arfinarfa90@guru.smk.belajar.id", name: "Administrator (Uji Coba)", role: "ADMIN" };
       return { token: "mock-token-admin-1", user };
     }
     
     const users = getTable("_mock_users");
-    const user = users.find((u: any) => u.email === email);
+    const user = users.find((u: any) => u.email.trim().toLowerCase() === emailLower);
     if (user) {
+      // In mock mode, we accept either "guru123" or any password for convenience
       return { token: "mock-token-" + user.id, user };
     }
 
@@ -697,7 +700,8 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   // Always trigger client-side fallback if hosted on frontend-only environments like GitHub Pages or Vercel
   const isFrontendPlatform = window.location.hostname.includes("github.io") || 
-                             window.location.hostname.includes("vercel.app");
+                             window.location.hostname.includes("vercel.app") ||
+                             window.location.hostname.includes("github.dev");
 
   if (isFrontendPlatform) {
     console.info(`[Switch API] Berjalan di platform statis (${window.location.hostname}). Beralih otomatis ke Offline Mock DB.`);
@@ -723,17 +727,28 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
         console.warn(`[Switch API] Endpoint ${endpoint} tidak ditemukan (404). Mencoba beralih ke Mock.`);
         return mockFetch(endpoint, options);
       }
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      } else {
+        console.warn(`[Switch API] Status ${response.status} dengan respon non-JSON. Mencoba beralih ke Mock.`);
+        return mockFetch(endpoint, options);
+      }
+    }
+
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.warn(`[Switch API] Response tidak dalam format JSON. Mencoba beralih ke Mock.`);
+      return mockFetch(endpoint, options);
     }
 
     return await response.json();
   } catch (err: any) {
-    // If it's a connection / network error, transparently fall back to client-side localStorage mock DB
-    if (err instanceof TypeError || err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
-      console.warn(`[Switch API] Koneksi backend gagal. Menjalankan fallback database lokal (Mock).`);
-      return mockFetch(endpoint, options);
-    }
-    throw err;
+    // If it's a connection / network error, or JSON parsing error (e.g. from html response),
+    // transparently fall back to client-side localStorage mock DB
+    console.warn(`[Switch API] Gagal memproses request backend (${err.message}). Menjalankan fallback database lokal (Mock).`);
+    return mockFetch(endpoint, options);
   }
 }

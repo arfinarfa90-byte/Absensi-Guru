@@ -92,7 +92,10 @@ export default function App() {
 
       const data = await apiFetch("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ 
+          email: email.trim().toLowerCase(), 
+          password: password.trim() 
+        }),
       });
 
       setAuthToken(data.token);
@@ -239,11 +242,16 @@ export default function App() {
           </form>
 
           {/* Quick login info for grading */}
-          <div className="mt-8 pt-4 border-t border-slate-800 text-center space-y-1.5">
+          <div className="mt-8 pt-4 border-t border-slate-800 text-center space-y-2">
             <span className="text-[10px] text-slate-500 uppercase block font-semibold">Demo Akun Uji Coba:</span>
-            <p className="text-[10px] text-teal-400 font-mono">
-              Admin: arfinarfa90@guru.smk.belajar.id / admin123
-            </p>
+            <div className="space-y-1">
+              <p className="text-[10px] text-teal-400 font-mono">
+                Admin: arfinarfa90@guru.smk.belajar.id / admin123
+              </p>
+              <p className="text-[10px] text-indigo-400 font-mono">
+                Guru: budi@smkn1jayapura.sch.id / guru123
+              </p>
+            </div>
           </div>
         </div>
       </div>
