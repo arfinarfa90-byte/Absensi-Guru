@@ -219,7 +219,11 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
       return getSingleObj("_mock_schedule");
     }
     if (method === "PUT") {
-      const schedule = { ...getSingleObj("_mock_schedule"), ...body };
+      const schedule = {
+        ...getSingleObj("_mock_schedule"),
+        ...body,
+        jamToleransi: body.jamToleransi ? parseInt(String(body.jamToleransi), 10) : 15
+      };
       saveSingleObj("_mock_schedule", schedule);
       return schedule;
     }
@@ -231,7 +235,13 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
       return getSingleObj("_mock_location");
     }
     if (method === "PUT") {
-      const location = { ...getSingleObj("_mock_location"), ...body };
+      const location = {
+        ...getSingleObj("_mock_location"),
+        ...body,
+        latitude: body.latitude ? parseFloat(String(body.latitude)) : 0,
+        longitude: body.longitude ? parseFloat(String(body.longitude)) : 0,
+        radius: body.radius ? parseFloat(String(body.radius)) : 100
+      };
       saveSingleObj("_mock_location", location);
       return location;
     }

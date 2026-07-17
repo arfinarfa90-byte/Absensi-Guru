@@ -210,7 +210,7 @@ export default function LokasiConfig({ onSuccessToast }: LokasiConfigProps) {
             <div className="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-850 text-xs text-slate-300">
               <p>📍 <strong>Lokalitas Sekolah:</strong> {location?.name}</p>
               <p>📏 <strong>Radius Batas:</strong> {location?.radius} meter</p>
-              <p>🌐 <strong>Titik Lat, Lng:</strong> {location?.latitude.toFixed(6)}, {location?.longitude.toFixed(6)}</p>
+              <p>🌐 <strong>Titik Lat, Lng:</strong> {location?.latitude != null ? Number(location.latitude).toFixed(6) : "0.000000"}, {location?.longitude != null ? Number(location.longitude).toFixed(6) : "0.000000"}</p>
             </div>
           </div>
 
