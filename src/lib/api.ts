@@ -52,21 +52,35 @@ function initMockData() {
       {
         id: "guru-1",
         NIP: "198005122010011003",
+        NIK: "3171011205800003",
         nama: "Drs. Budi Santoso",
         email: "budi@smkn1jayapura.sch.id",
         mataPelajaran: "Matematika",
         telepon: "081234567890",
-        status: true,
+        noHP: "081234567890",
+        jenisKelamin: "L",
+        tempatLahir: "Jayapura",
+        tanggalLahir: "1980-05-12",
+        alamat: "Jl. Angkasa No. 12, Jayapura",
+        jabatan: "Guru Madya",
+        status: "AKTIF",
         userId: "user-guru-1"
       },
       {
         id: "guru-2",
         NIP: "198509202015022001",
+        NIK: "3171012009850001",
         nama: "Siti Aminah, S.Pd.",
         email: "siti@smkn1jayapura.sch.id",
         mataPelajaran: "Bahasa Indonesia",
         telepon: "081298765432",
-        status: true,
+        noHP: "081298765432",
+        jenisKelamin: "P",
+        tempatLahir: "Jayapura",
+        tanggalLahir: "1985-09-20",
+        alamat: "Jl. Sentani No. 45, Jayapura",
+        jabatan: "Guru Pratama",
+        status: "AKTIF",
         userId: "user-guru-2"
       }
     ]));
@@ -167,7 +181,31 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     if (token.startsWith("mock-token-")) {
       const userId = token.replace("mock-token-", "");
       const users = getTable("_mock_users");
-      return users.find((u: any) => u.id === userId) || null;
+      const user = users.find((u: any) => u.id === userId);
+      if (user && user.role === "GURU") {
+        const gurus = getTable("_mock_gurus");
+        const guru = gurus.find((g: any) => g.userId === userId || g.email === user.email);
+        if (guru) {
+          return {
+            id: guru.id,
+            email: guru.email,
+            role: "GURU",
+            name: guru.nama,
+            NIP: guru.NIP,
+            NIK: guru.NIK,
+            jenisKelamin: guru.jenisKelamin,
+            alamat: guru.alamat,
+            noHP: guru.noHP || guru.telepon,
+            jabatan: guru.jabatan,
+            mataPelajaran: guru.mataPelajaran,
+            status: guru.status,
+            foto: guru.foto,
+            faceID: guru.faceID,
+            embeddings: guru.embeddings || [],
+          };
+        }
+      }
+      return user || null;
     }
     return null;
   };
@@ -262,16 +300,15 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
         );
       }
 
-      if (statusFilter !== "semua") {
-        const targetStatus = statusFilter === "aktif";
-        gurus = gurus.filter((g: any) => g.status === targetStatus);
+      if (statusFilter && statusFilter !== "semua" && statusFilter !== "") {
+        gurus = gurus.filter((g: any) => g.status === statusFilter);
       }
 
       return gurus;
     }
 
     if (method === "POST") {
-      const { NIP, nama, email, mataPelajaran, telepon } = body;
+      const { NIP, nama, email, mataPelajaran, telepon, NIK, jenisKelamin, tempatLahir, tanggalLahir, alamat, noHP, jabatan } = body;
       const gurus = getTable("_mock_gurus");
       const users = getTable("_mock_users");
 
@@ -291,9 +328,18 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
         nama,
         email,
         mataPelajaran,
-        telepon,
-        status: true,
+        telepon: noHP || telepon || "",
+        noHP: noHP || telepon || "",
+        NIK: NIK || "",
+        jenisKelamin: jenisKelamin || "L",
+        tempatLahir: tempatLahir || "",
+        tanggalLahir: tanggalLahir || "",
+        alamat: alamat || "",
+        jabatan: jabatan || "",
+        status: "AKTIF",
         userId,
+        faceID: null,
+        embeddings: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -340,7 +386,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
       throw new Error("Guru tidak ditemukan.");
     }
 
-    if (method === "PUT" && subAction === "status") {
+    if ((method === "POST" || method === "PUT") && subAction === "status") {
       const { status } = body;
       if (guruIdx > -1) {
         gurus[guruIdx].status = status;
@@ -351,15 +397,30 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     }
 
     if (method === "PUT" && !subAction) { // update guru
-      const { NIP, nama, email, mataPelajaran, telepon } = body;
+      const { NIP, nama, email, mataPelajaran, telepon, NIK, jenisKelamin, tempatLahir, tanggalLahir, alamat, noHP, jabatan } = body;
       if (guruIdx > -1) {
-        gurus[guruIdx] = { ...gurus[guruIdx], NIP, nama, email, mataPelajaran, telepon };
+        gurus[guruIdx] = { 
+          ...gurus[guruIdx], 
+          NIP: NIP || gurus[guruIdx].NIP, 
+          nama: nama || gurus[guruIdx].nama, 
+          email: email || gurus[guruIdx].email, 
+          mataPelajaran: mataPelajaran || gurus[guruIdx].mataPelajaran, 
+          telepon: noHP || telepon || gurus[guruIdx].telepon,
+          noHP: noHP || gurus[guruIdx].noHP,
+          NIK: NIK || gurus[guruIdx].NIK,
+          jenisKelamin: jenisKelamin || gurus[guruIdx].jenisKelamin,
+          tempatLahir: tempatLahir || gurus[guruIdx].tempatLahir,
+          tanggalLahir: tanggalLahir || gurus[guruIdx].tanggalLahir,
+          alamat: alamat || gurus[guruIdx].alamat,
+          jabatan: jabatan || gurus[guruIdx].jabatan,
+          updatedAt: new Date().toISOString()
+        };
         
         // update corresponding user name / email
         const userIdx = users.findIndex((u: any) => u.id === gurus[guruIdx].userId);
         if (userIdx > -1) {
-          users[userIdx].name = nama;
-          users[userIdx].email = email;
+          users[userIdx].name = nama || users[userIdx].name;
+          users[userIdx].email = email || users[userIdx].email;
         }
 
         saveTable("_mock_gurus", gurus);
@@ -374,11 +435,23 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     }
 
     if (method === "POST" && subAction === "reset-face") {
-      return { success: true, message: "Pendaftaran wajah berhasil di-reset." };
+      if (guruIdx > -1) {
+        gurus[guruIdx].faceID = null;
+        gurus[guruIdx].embeddings = [];
+        saveTable("_mock_gurus", gurus);
+        return { success: true, message: "Pendaftaran wajah berhasil di-reset." };
+      }
+      throw new Error("Guru tidak ditemukan.");
     }
 
     if (method === "POST" && subAction === "register-face") {
-      return { success: true, message: "Pendaftaran wajah berhasil didaftarkan." };
+      if (guruIdx > -1) {
+        gurus[guruIdx].faceID = `FACE-${gurus[guruIdx].NIP}-${Date.now()}`;
+        gurus[guruIdx].embeddings = body.embeddings || [];
+        saveTable("_mock_gurus", gurus);
+        return { success: true, message: "Pendaftaran wajah berhasil didaftarkan." };
+      }
+      throw new Error("Guru tidak ditemukan.");
     }
   }
 
