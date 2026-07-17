@@ -11,6 +11,27 @@ export const isFrontendPlatform = typeof window !== "undefined" && (
 );
 
 export const getBaseUrl = () => {
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const apiParam = params.get("api");
+    if (apiParam) {
+      localStorage.setItem("attendance_api_url", apiParam);
+      try {
+        // Clean query parameter from address bar to keep it tidy
+        const url = new URL(window.location.href);
+        url.searchParams.delete("api");
+        window.history.replaceState({}, document.title, url.toString());
+      } catch (e) {
+        console.error("Failed to clean search param", e);
+      }
+    }
+    
+    const savedUrl = localStorage.getItem("attendance_api_url");
+    if (savedUrl) {
+      return savedUrl;
+    }
+  }
+
   const metaEnv = (import.meta as any).env;
   if (metaEnv && metaEnv.VITE_API_URL) {
     return metaEnv.VITE_API_URL;
@@ -18,18 +39,32 @@ export const getBaseUrl = () => {
   
   // Dynamic production URL of the deployed Cloud Run container
   const CLOUD_RUN_URL = "https://ais-pre-desns7ivcyf2oafn6gd4tv-432802410429.asia-southeast1.run.app";
+  const CLOUD_DEV_URL = "https://ais-dev-desns7ivcyf2oafn6gd4tv-432802410429.asia-southeast1.run.app";
   
   // If we are on a static platform (Vercel, GitHub Pages) and there is no custom API URL,
-  // we use the live Cloud Run backend instead of offline Mock DB, so data is persistent across devices!
+  // we default to the live Cloud Run backend instead of offline Mock DB, so data is persistent across devices!
   if (isFrontendPlatform) {
+    // If the active URL of the current builder contains ais-dev, use CLOUD_DEV_URL
+    if (typeof window !== "undefined" && window.location.hostname.includes("ais-dev")) {
+      return `${CLOUD_DEV_URL}/api`;
+    }
     return `${CLOUD_RUN_URL}/api`;
   }
   return "/api";
 };
 
-const BASE_URL = getBaseUrl();
+export const setCustomApiUrl = (url: string | null) => {
+  if (url) {
+    localStorage.setItem("attendance_api_url", url);
+  } else {
+    localStorage.removeItem("attendance_api_url");
+  }
+};
 
 export const getActiveDatabaseMode = () => {
+  if (typeof window !== "undefined" && localStorage.getItem("attendance_fallback_active") === "true") {
+    return "Local Mock DB";
+  }
   const activeUrl = getBaseUrl();
   if (activeUrl.startsWith("http")) {
     return "Cloud Sync";
@@ -800,7 +835,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   };
 
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(`${getBaseUrl()}${endpoint}`, {
       ...options,
       headers,
     });
@@ -809,6 +844,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
       // If it returned 404 (endpoint not found) and we can fallback to mock
       if (response.status === 404) {
         console.warn(`[Switch API] Endpoint ${endpoint} tidak ditemukan (404). Mencoba beralih ke Mock.`);
+        localStorage.setItem("attendance_fallback_active", "true");
         return mockFetch(endpoint, options);
       }
       
@@ -818,6 +854,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
         throw new Error(errorData.error || `Request failed with status ${response.status}`);
       } else {
         console.warn(`[Switch API] Status ${response.status} dengan respon non-JSON. Mencoba beralih ke Mock.`);
+        localStorage.setItem("attendance_fallback_active", "true");
         return mockFetch(endpoint, options);
       }
     }
@@ -825,14 +862,18 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     const contentType = response.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
       console.warn(`[Switch API] Response tidak dalam format JSON. Mencoba beralih ke Mock.`);
+      localStorage.setItem("attendance_fallback_active", "true");
       return mockFetch(endpoint, options);
     }
 
-    return await response.json();
+    const jsonResult = await response.json();
+    localStorage.removeItem("attendance_fallback_active");
+    return jsonResult;
   } catch (err: any) {
     // If it's a connection / network error, or JSON parsing error (e.g. from html response),
     // transparently fall back to client-side localStorage mock DB
     console.warn(`[Switch API] Gagal memproses request backend (${err.message}). Menjalankan fallback database lokal (Mock).`);
+    localStorage.setItem("attendance_fallback_active", "true");
     return mockFetch(endpoint, options);
   }
 }

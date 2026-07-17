@@ -1,6 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { apiFetch } from "../lib/api";
-import { School, Database, Save, Sparkles, Download, Upload, AlertCircle, RefreshCw, Settings } from "lucide-react";
+import { apiFetch, getBaseUrl, setCustomApiUrl, getActiveDatabaseMode } from "../lib/api";
+import { 
+  School, 
+  Database, 
+  Save, 
+  Sparkles, 
+  Download, 
+  Upload, 
+  AlertCircle, 
+  RefreshCw, 
+  Settings,
+  Share2,
+  Copy,
+  Link,
+  Server,
+  Check
+} from "lucide-react";
 
 interface ProfilAdminProps {
   onSuccessToast: (msg: string) => void;
@@ -11,6 +26,12 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Custom API configuration state
+  const [customApiUrl, setCustomApiUrlInput] = useState(() => {
+    return localStorage.getItem("attendance_api_url") || "";
+  });
+  const [copied, setCopied] = useState(false);
 
   // Form fields
   const [name, setName] = useState("");
@@ -116,6 +137,44 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleSaveApiUrl = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formattedUrl = customApiUrl.trim();
+    if (formattedUrl) {
+      setCustomApiUrl(formattedUrl);
+      onSuccessToast("URL Backend Server berhasil disimpan! Halaman akan dimuat ulang.");
+    } else {
+      setCustomApiUrl(null);
+      onSuccessToast("URL Backend diatur ulang ke server default! Halaman akan dimuat ulang.");
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
+
+  const handleCopySharingLink = () => {
+    const activeApi = getBaseUrl();
+    const sharingUrl = `${window.location.origin}/?api=${activeApi}`;
+    
+    try {
+      navigator.clipboard.writeText(sharingUrl);
+      setCopied(true);
+      onSuccessToast("Link berbagi berhasil disalin! Silakan kirimkan link ini ke WhatsApp guru-guru.");
+      setTimeout(() => setCopied(false), 3000);
+    } catch (e) {
+      // Fallback if clipboard API fails
+      const input = document.createElement("input");
+      input.value = sharingUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      onSuccessToast("Link berbagi berhasil disalin (fallback)! Silakan bagikan ke guru-guru.");
+      setTimeout(() => setCopied(false), 3000);
+    }
   };
 
   if (loading) {
@@ -240,6 +299,100 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
               <strong>Peringatan:</strong> Memulihkan cadangan akan menimpa seluruh rekaman database saat ini. Harap lakukan ekspor terlebih dahulu sebelum melakukan pemulihan.
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Cloud Sync and Multi-Device Connectivity Section */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 className="font-semibold text-white flex items-center gap-2 text-sm sm:text-base">
+            <Server className="w-5 h-5 text-indigo-400" />
+            Hubungkan Aplikasi ke Perangkat Guru & Smartphone (Sinkronisasi Cloud)
+          </h3>
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+            getActiveDatabaseMode() === "Local Mock DB" 
+              ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" 
+              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 animate-pulse"
+          }`}>
+            Mode: {getActiveDatabaseMode()}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Column 1: Copy Sharing Link */}
+          <div className="bg-slate-950 border border-slate-800/80 p-5 rounded-xl flex flex-col justify-between space-y-4">
+            <div>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <Share2 className="w-4 h-4 text-teal-400" />
+                Langkah 1: Bagikan Link Khusus ke Guru-Guru
+              </h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Salin link khusus di bawah ini dan bagikan kepada seluruh guru (misal lewat WhatsApp Group sekolah). Ketika guru membuka link ini di HP atau laptop mereka, aplikasi mereka akan <strong>otomatis langsung terhubung ke database server yang sama</strong> dengan yang Anda kelola saat ini. Semua data guru yang telah Anda daftarkan akan langsung sinkron secara <em>real-time</em>!
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleCopySharingLink}
+                className="w-full py-3 bg-gradient-to-r from-teal-400 to-indigo-500 hover:from-teal-500 hover:to-indigo-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copied ? "Link Berhasil Disalin!" : "Salin Link Berbagi untuk Guru"}</span>
+              </button>
+              <div className="mt-2 text-[10px] font-mono text-slate-500 text-center break-all bg-slate-900 p-2 rounded border border-slate-800">
+                {window.location.origin}/?api={getBaseUrl()}
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Configure API Endpoint */}
+          <form onSubmit={handleSaveApiUrl} className="bg-slate-950 border border-slate-800/80 p-5 rounded-xl flex flex-col justify-between space-y-4">
+            <div>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                <Link className="w-4 h-4 text-indigo-400" />
+                Langkah 2: Kelola URL API Backend Server
+              </h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Secara default, aplikasi mendeteksi server Cloud Run secara otomatis. Jika Anda ingin memindahkan database ke server lain atau memaksa menggunakan URL tertentu, isi di bawah ini dan klik Simpan. Kosongkan lalu Simpan untuk mengembalikan ke deteksi otomatis.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">URL Endpoint API Aktif</label>
+              <input
+                type="text"
+                value={customApiUrl}
+                onChange={(e) => setCustomApiUrlInput(e.target.value)}
+                className="w-full p-2.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+                placeholder={`Contoh: https://my-server.run.app/api (Saat ini: ${getBaseUrl()})`}
+              />
+            </div>
+
+            <div className="flex gap-2.5 justify-end">
+              {localStorage.getItem("attendance_api_url") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomApiUrlInput("");
+                    setCustomApiUrl(null);
+                    onSuccessToast("URL Backend disetel ulang ke default. Halaman akan dimuat ulang.");
+                    setTimeout(() => window.location.reload(), 1000);
+                  }}
+                  className="px-3.5 py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold cursor-pointer"
+                >
+                  Gunakan Default
+                </button>
+              )}
+              <button
+                type="submit"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Simpan URL</span>
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
