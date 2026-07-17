@@ -6,7 +6,10 @@ const BASE_URL = "/api";
 export const isFrontendPlatform = typeof window !== "undefined" && (
   window.location.hostname.includes("github.io") || 
   window.location.hostname.includes("vercel.app") ||
-  window.location.hostname.includes("github.dev")
+  window.location.hostname.includes("github.dev") ||
+  (!window.location.hostname.includes("run.app") && 
+   !window.location.hostname.includes("localhost") && 
+   !window.location.hostname.includes("127.0.0.1"))
 );
 
 export function getAuthToken(): string | null {
@@ -54,42 +57,7 @@ function initMockData() {
     }));
   }
   if (!localStorage.getItem("_mock_gurus")) {
-    localStorage.setItem("_mock_gurus", JSON.stringify([
-      {
-        id: "guru-1",
-        NIP: "198005122010011003",
-        NIK: "3171011205800003",
-        nama: "Drs. Budi Santoso",
-        email: "budi@smkn1jayapura.sch.id",
-        mataPelajaran: "Matematika",
-        telepon: "081234567890",
-        noHP: "081234567890",
-        jenisKelamin: "L",
-        tempatLahir: "Jayapura",
-        tanggalLahir: "1980-05-12",
-        alamat: "Jl. Angkasa No. 12, Jayapura",
-        jabatan: "Guru Madya",
-        status: "AKTIF",
-        userId: "user-guru-1"
-      },
-      {
-        id: "guru-2",
-        NIP: "198509202015022001",
-        NIK: "3171012009850001",
-        nama: "Siti Aminah, S.Pd.",
-        email: "siti@smkn1jayapura.sch.id",
-        mataPelajaran: "Bahasa Indonesia",
-        telepon: "081298765432",
-        noHP: "081298765432",
-        jenisKelamin: "P",
-        tempatLahir: "Jayapura",
-        tanggalLahir: "1985-09-20",
-        alamat: "Jl. Sentani No. 45, Jayapura",
-        jabatan: "Guru Pratama",
-        status: "AKTIF",
-        userId: "user-guru-2"
-      }
-    ]));
+    localStorage.setItem("_mock_gurus", JSON.stringify([]));
   }
   if (!localStorage.getItem("_mock_users")) {
     localStorage.setItem("_mock_users", JSON.stringify([
@@ -98,59 +66,11 @@ function initMockData() {
         email: "hasanlek486@gmail.com",
         name: "Administrator (Uji Coba)",
         role: "ADMIN"
-      },
-      {
-        id: "user-guru-1",
-        email: "budi@smkn1jayapura.sch.id",
-        name: "Drs. Budi Santoso",
-        role: "GURU"
-      },
-      {
-        id: "user-guru-2",
-        email: "siti@smkn1jayapura.sch.id",
-        name: "Siti Aminah, S.Pd.",
-        role: "GURU"
       }
     ]));
   }
   if (!localStorage.getItem("_mock_attendances")) {
-    const list: any[] = [];
-    const statuses = ["HADIR", "TERLAMBAT", "HADIR", "IZIN", "HADIR", "HADIR", "HADIR"];
-    const dates: string[] = [];
-    
-    // Generate dates for past 7 days
-    for (let i = 7; i >= 1; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().split("T")[0]);
-    }
-
-    dates.forEach((dateStr, idx) => {
-      const dayOfWeek = new Date(dateStr).getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Skip weekends
-        const st = statuses[idx % statuses.length];
-        list.push({
-          id: `att-mock-1-${idx}`,
-          date: dateStr,
-          jamMasuk: st === "HADIR" ? "06:54:12" : st === "TERLAMBAT" ? "07:23:45" : null,
-          jamPulang: st === "HADIR" || st === "TERLAMBAT" ? "14:35:10" : null,
-          status: st,
-          alamat: "Dalam Area Sekolah (Mock)",
-          guruId: "guru-1"
-        });
-        list.push({
-          id: `att-mock-2-${idx}`,
-          date: dateStr,
-          jamMasuk: "06:50:00",
-          jamPulang: "14:30:00",
-          status: "HADIR",
-          alamat: "Dalam Area Sekolah (Mock)",
-          guruId: "guru-2"
-        });
-      }
-    });
-
-    localStorage.setItem("_mock_attendances", JSON.stringify(list));
+    localStorage.setItem("_mock_attendances", JSON.stringify([]));
   }
 }
 

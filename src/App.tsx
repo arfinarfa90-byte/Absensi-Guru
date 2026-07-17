@@ -248,9 +248,6 @@ export default function App() {
               <p className="text-[10px] text-teal-400 font-mono">
                 Admin: hasanlek486@gmail.com / admin123
               </p>
-              <p className="text-[10px] text-indigo-400 font-mono">
-                Guru: budi@smkn1jayapura.sch.id / guru123
-              </p>
             </div>
           </div>
         </div>
