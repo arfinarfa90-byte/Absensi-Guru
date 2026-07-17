@@ -18,6 +18,7 @@ import {
   Bell,
   Database
 } from "lucide-react";
+import { isFrontendPlatform } from "../lib/api";
 
 interface SidebarProps {
   role: "ADMIN" | "GURU";
@@ -109,6 +110,12 @@ export default function Sidebar({
             <div className="overflow-hidden">
               <h4 className="text-xs font-semibold text-white truncate leading-tight">{userName}</h4>
               <p className="text-[10px] text-slate-400 truncate mt-0.5">{role}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${isFrontendPlatform ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-pulse"}`} />
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider font-semibold">
+                  {isFrontendPlatform ? "Local DB" : "Cloud Server"}
+                </span>
+              </div>
             </div>
           )}
         </div>

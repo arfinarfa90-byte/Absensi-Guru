@@ -3,6 +3,12 @@ import * as XLSX from "xlsx";
 
 const BASE_URL = "/api";
 
+export const isFrontendPlatform = typeof window !== "undefined" && (
+  window.location.hostname.includes("github.io") || 
+  window.location.hostname.includes("vercel.app") ||
+  window.location.hostname.includes("github.dev")
+);
+
 export function getAuthToken(): string | null {
   return localStorage.getItem("attendance_guru_token");
 }
@@ -777,15 +783,68 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     };
   }
 
+  // --- 10. BACKUP & RESTORE DATABASE (OFFLINE fallback) ---
+  if (path === "/backup/export" && method === "POST") {
+    const users = getTable("_mock_users");
+    const gurus = getTable("_mock_gurus");
+    const attendances = getTable("_mock_attendances");
+    const schedule = getSingleObj("_mock_schedule");
+    const location = getSingleObj("_mock_location");
+    const school = getSingleObj("_mock_school");
+
+    return {
+      users,
+      gurus,
+      embeddings: [], // embedded directly inside the gurus table in mock localStorage
+      attendances,
+      schedules: schedule ? [schedule] : [],
+      locations: location ? [location] : [],
+      schools: school ? [school] : [],
+      settings: [],
+      notifications: [],
+      logs: []
+    };
+  }
+
+  if (path === "/backup/restore" && method === "POST") {
+    if (!body || !body.data) {
+      throw new Error("Data cadangan tidak valid (Mock).");
+    }
+    const data = body.data;
+    if (!data.users || !data.gurus || !data.attendances) {
+      throw new Error("Format file cadangan tidak didukung (Mock).");
+    }
+
+    if (Array.isArray(data.users)) saveTable("_mock_users", data.users);
+    if (Array.isArray(data.gurus)) saveTable("_mock_gurus", data.gurus);
+    if (Array.isArray(data.attendances)) saveTable("_mock_attendances", data.attendances);
+
+    if (data.schedules && data.schedules.length > 0) {
+      saveSingleObj("_mock_schedule", data.schedules[0]);
+    } else if (data.schedule) {
+      saveSingleObj("_mock_schedule", data.schedule);
+    }
+
+    if (data.locations && data.locations.length > 0) {
+      saveSingleObj("_mock_location", data.locations[0]);
+    } else if (data.location) {
+      saveSingleObj("_mock_location", data.location);
+    }
+
+    if (data.schools && data.schools.length > 0) {
+      saveSingleObj("_mock_school", data.schools[0]);
+    } else if (data.school) {
+      saveSingleObj("_mock_school", data.school);
+    }
+
+    return { success: true, message: "Database Mock berhasil dipulihkan dari data cadangan." };
+  }
+
   throw new Error(`Endpoint mock ${method} ${path} belum diimplementasikan.`);
 }
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   // Always trigger client-side fallback if hosted on frontend-only environments like GitHub Pages or Vercel
-  const isFrontendPlatform = window.location.hostname.includes("github.io") || 
-                             window.location.hostname.includes("vercel.app") ||
-                             window.location.hostname.includes("github.dev");
-
   if (isFrontendPlatform) {
     console.info(`[Switch API] Berjalan di platform statis (${window.location.hostname}). Beralih otomatis ke Offline Mock DB.`);
     return mockFetch(endpoint, options);

@@ -201,8 +201,8 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
   }
 
   // Determine button parameters
-  const isWithinRadius = location && distance !== null && distance <= location.radius;
-  const showWarningZone = location && distance !== null && distance > location.radius;
+  const isWithinRadius = location && distance !== null && distance <= (location.radius != null ? parseFloat(String(location.radius)) : 100);
+  const showWarningZone = location && distance !== null && distance > (location.radius != null ? parseFloat(String(location.radius)) : 100);
 
   return (
     <div className="p-6 space-y-6">
@@ -290,7 +290,7 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
                   <h5 className="font-semibold text-white">Tidak Berada di Area Sekolah</h5>
                   <p className="text-[11px] text-rose-200 mt-1 leading-relaxed">
                     Jarak Anda saat ini: <strong>{Math.round(distance || 0)} meter</strong> dari titik koordinat sekolah.
-                    Radius presensi maksimal yang diizinkan adalah <strong>{location?.radius} meter</strong>.
+                    Radius presensi maksimal yang diizinkan adalah <strong>{location?.radius != null ? location.radius : 100} meter</strong>.
                     Tombol presensi akan dinonaktifkan sementara.
                   </p>
                 </div>
@@ -385,7 +385,7 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
               <div className="flex items-center justify-between text-xs py-1 border-b border-slate-850">
                 <span className="text-slate-400 font-medium">Radius Maksimal</span>
                 <strong className="text-teal-400 font-mono">
-                  {location ? `${location.radius} meter` : "--"}
+                  {location ? `${location.radius != null ? location.radius : 100} meter` : "--"}
                 </strong>
               </div>
 
