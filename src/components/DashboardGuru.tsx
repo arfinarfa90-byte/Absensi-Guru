@@ -109,10 +109,13 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
 
         // Haversine formula distance calculation
         const R = 6371e3; // meters
+        const targetLat = targetLoc.latitude != null ? parseFloat(String(targetLoc.latitude)) : -6.168582;
+        const targetLng = targetLoc.longitude != null ? parseFloat(String(targetLoc.longitude)) : 106.834044;
+
         const lat1 = (uLat * Math.PI) / 180;
-        const lat2 = (targetLoc.latitude * Math.PI) / 180;
-        const deltaLat = ((targetLoc.latitude - uLat) * Math.PI) / 180;
-        const deltaLng = ((targetLoc.longitude - uLng) * Math.PI) / 180;
+        const lat2 = (targetLat * Math.PI) / 180;
+        const deltaLat = ((targetLat - uLat) * Math.PI) / 180;
+        const deltaLng = ((targetLng - uLng) * Math.PI) / 180;
 
         const a =
           Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
