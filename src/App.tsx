@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { apiFetch, getAuthToken, setAuthToken, removeAuthToken } from "./lib/api";
+import { apiFetch, getAuthToken, setAuthToken, removeAuthToken, decodeSyncPayload } from "./lib/api";
 import Sidebar from "./components/Sidebar";
 import DashboardAdmin from "./components/DashboardAdmin";
 import DashboardGuru from "./components/DashboardGuru";
@@ -76,6 +76,62 @@ export default function App() {
   };
 
   useEffect(() => {
+    const handleUrlSync = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const syncParam = params.get("sync");
+      if (syncParam) {
+        try {
+          const decoded = decodeSyncPayload(syncParam);
+          if (decoded) {
+            // Save to localStorage Mock DB as well
+            if (decoded.school) localStorage.setItem("_mock_school", JSON.stringify(decoded.school));
+            if (decoded.schedule) localStorage.setItem("_mock_schedule", JSON.stringify(decoded.schedule));
+            if (decoded.location) localStorage.setItem("_mock_location", JSON.stringify(decoded.location));
+            if (decoded.gurus) localStorage.setItem("_mock_gurus", JSON.stringify(decoded.gurus));
+
+            // Also import corresponding users to mock db
+            const mockUsers = JSON.parse(localStorage.getItem("_mock_users") || "[]");
+            decoded.gurus.forEach((g: any) => {
+              if (!mockUsers.some((u: any) => u.email === g.email)) {
+                mockUsers.push({
+                  id: "user-guru-" + g.id,
+                  email: g.email,
+                  password: "guru123",
+                  name: g.nama,
+                  role: "GURU"
+                });
+              }
+            });
+            localStorage.setItem("_mock_users", JSON.stringify(mockUsers));
+
+            // Try to sync with the active server backend if not local only
+            try {
+              await apiFetch("/sync/import", {
+                method: "POST",
+                body: JSON.stringify(decoded)
+              });
+            } catch (err) {
+              console.warn("Backend sync failed, fallbacked to local mock sync", err);
+            }
+
+            triggerToast("SINKRONISASI SUKSES: Data sekolah, jadwal, lokasi, dan data guru berhasil dimuat otomatis!");
+            
+            // Clean up sync parameter from address bar
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+            // Re-load session state safely
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          }
+        } catch (err: any) {
+          console.error("Failed to decode sync parameter:", err);
+        }
+      }
+    };
+
+    handleUrlSync();
     checkSession();
   }, []);
 

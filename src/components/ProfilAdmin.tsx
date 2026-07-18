@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { apiFetch, getBaseUrl, setCustomApiUrl, getActiveDatabaseMode } from "../lib/api";
+import { apiFetch, getBaseUrl, setCustomApiUrl, getActiveDatabaseMode, encodeSyncPayload } from "../lib/api";
 import { 
   School, 
   Database, 
@@ -154,14 +154,47 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
     }, 1000);
   };
 
-  const handleCopySharingLink = () => {
+  const handleCopySharingLink = async () => {
     const activeApi = getBaseUrl();
-    const sharingUrl = `${window.location.origin}/?api=${activeApi}`;
+    let syncParam = "";
+
+    try {
+      // Fetch sync data from backend / local mock
+      let payload;
+      if (getActiveDatabaseMode() === "Local Mock DB") {
+        const getSingleObj = (key: string) => {
+          const val = localStorage.getItem(key);
+          return val ? JSON.parse(val) : null;
+        };
+        const getTable = (key: string) => {
+          const val = localStorage.getItem(key);
+          return val ? JSON.parse(val) : [];
+        };
+        payload = {
+          school: getSingleObj("_mock_school"),
+          schedule: getSingleObj("_mock_schedule"),
+          location: getSingleObj("_mock_location"),
+          gurus: getTable("_mock_gurus"),
+        };
+      } else {
+        payload = await apiFetch("/sync/export");
+      }
+
+      if (payload) {
+        syncParam = encodeSyncPayload(payload);
+      }
+    } catch (err) {
+      console.warn("Failed to get sync payload, generating link without sync param.", err);
+    }
+
+    const sharingUrl = syncParam 
+      ? `${window.location.origin}/?api=${activeApi}&sync=${syncParam}`
+      : `${window.location.origin}/?api=${activeApi}`;
     
     try {
       navigator.clipboard.writeText(sharingUrl);
       setCopied(true);
-      onSuccessToast("Link berbagi berhasil disalin! Silakan kirimkan link ini ke WhatsApp guru-guru.");
+      onSuccessToast("Link berbagi khusus guru disalin beserta data sinkronisasi otomatis!");
       setTimeout(() => setCopied(false), 3000);
     } catch (e) {
       // Fallback if clipboard API fails
@@ -172,7 +205,7 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
       document.execCommand("copy");
       document.body.removeChild(input);
       setCopied(true);
-      onSuccessToast("Link berbagi berhasil disalin (fallback)! Silakan bagikan ke guru-guru.");
+      onSuccessToast("Link berbagi berhasil disalin (fallback) beserta data sinkronisasi!");
       setTimeout(() => setCopied(false), 3000);
     }
   };

@@ -162,6 +162,205 @@ const requireAdmin = (req: any, res: any, next: any) => {
   }
 };
 
+// --- DATABASE SYNC ENDPOINTS (PERSISTENCE REPLICATION FOR CLOUD RUN / VERCEL) ---
+
+app.get("/api/sync/export", async (req, res) => {
+  try {
+    const school = await prisma.school.findFirst();
+    const schedule = await prisma.schedule.findFirst();
+    const location = await prisma.location.findFirst();
+    const gurus = await prisma.guru.findMany();
+
+    res.json({
+      school,
+      schedule,
+      location,
+      gurus: gurus.map(g => ({
+        ...g,
+        foto: null // Keep payload small to avoid long URLs
+      }))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Gagal mengekspor data sinkronisasi: " + err.message });
+  }
+});
+
+app.post("/api/sync/import", async (req, res) => {
+  const { school, schedule, location, gurus } = req.body;
+
+  try {
+    // 1. Update/create School
+    if (school) {
+      const existingSchool = await prisma.school.findFirst();
+      if (existingSchool) {
+        await prisma.school.update({
+          where: { id: existingSchool.id },
+          data: {
+            name: school.name || existingSchool.name,
+            address: school.address || existingSchool.address,
+            logo: school.logo || existingSchool.logo,
+          }
+        });
+      } else {
+        await prisma.school.create({
+          data: {
+            name: school.name || "SMK Negeri 1 Jakarta",
+            address: school.address || "",
+            logo: school.logo,
+          }
+        });
+      }
+    }
+
+    // 2. Update/create Schedule
+    if (schedule) {
+      const existingSchedule = await prisma.schedule.findFirst();
+      if (existingSchedule) {
+        await prisma.schedule.update({
+          where: { id: existingSchedule.id },
+          data: {
+            name: schedule.name || existingSchedule.name,
+            jamMasuk: schedule.jamMasuk || existingSchedule.jamMasuk,
+            jamPulang: schedule.jamPulang || existingSchedule.jamPulang,
+            hariKerja: schedule.hariKerja || existingSchedule.hariKerja,
+            jamToleransi: schedule.jamToleransi !== undefined ? parseInt(String(schedule.jamToleransi), 10) : existingSchedule.jamToleransi,
+            timezone: schedule.timezone || existingSchedule.timezone,
+          }
+        });
+      } else {
+        await prisma.schedule.create({
+          data: {
+            name: schedule.name || "Jadwal Kerja Standard Guru",
+            jamMasuk: schedule.jamMasuk || "07:00",
+            jamPulang: schedule.jamPulang || "14:30",
+            hariKerja: schedule.hariKerja || "Senin,Selasa,Rabu,Kamis,Jumat",
+            jamToleransi: schedule.jamToleransi !== undefined ? parseInt(String(schedule.jamToleransi), 10) : 15,
+            timezone: schedule.timezone || "WIT",
+          }
+        });
+      }
+    }
+
+    // 3. Update/create Location
+    if (location) {
+      const existingLocation = await prisma.location.findFirst();
+      if (existingLocation) {
+        await prisma.location.update({
+          where: { id: existingLocation.id },
+          data: {
+            name: location.name || existingLocation.name,
+            latitude: location.latitude !== undefined ? parseFloat(String(location.latitude)) : existingLocation.latitude,
+            longitude: location.longitude !== undefined ? parseFloat(String(location.longitude)) : existingLocation.longitude,
+            radius: location.radius !== undefined ? parseFloat(String(location.radius)) : existingLocation.radius,
+          }
+        });
+      } else {
+        await prisma.location.create({
+          data: {
+            name: location.name || "Kampus Utama SMK Negeri 1 Jakarta",
+            latitude: location.latitude !== undefined ? parseFloat(String(location.latitude)) : -6.168582,
+            longitude: location.longitude !== undefined ? parseFloat(String(location.longitude)) : 106.834044,
+            radius: location.radius !== undefined ? parseFloat(String(location.radius)) : 100.0,
+          }
+        });
+      }
+    }
+
+    // 4. Update/create Gurus and their User accounts
+    if (gurus && Array.isArray(gurus)) {
+      const defaultPasswordHash = await bcrypt.hash("guru123", 10);
+      for (const g of gurus) {
+        // Find existing Guru by NIP or Email
+        let existingGuru = await prisma.guru.findFirst({
+          where: {
+            OR: [
+              { NIP: g.NIP },
+              { email: g.email }
+            ]
+          }
+        });
+
+        let guruId = existingGuru?.id;
+
+        if (existingGuru) {
+          // Update Guru profile
+          await prisma.guru.update({
+            where: { id: existingGuru.id },
+            data: {
+              nama: g.nama || existingGuru.nama,
+              NIK: g.NIK || existingGuru.NIK,
+              jenisKelamin: g.jenisKelamin || existingGuru.jenisKelamin,
+              tempatLahir: g.tempatLahir || existingGuru.tempatLahir,
+              tanggalLahir: g.tanggalLahir || existingGuru.tanggalLahir,
+              alamat: g.alamat || existingGuru.alamat,
+              noHP: g.noHP || existingGuru.noHP,
+              email: g.email || existingGuru.email,
+              status: g.status || existingGuru.status || "AKTIF",
+              jabatan: g.jabatan || existingGuru.jabatan || "",
+              mataPelajaran: g.mataPelajaran || existingGuru.mataPelajaran || "",
+            }
+          });
+        } else {
+          // Create new Guru
+          const created = await prisma.guru.create({
+            data: {
+              id: g.id || undefined,
+              nama: g.nama,
+              NIP: g.NIP,
+              NIK: g.NIK,
+              jenisKelamin: g.jenisKelamin || "L",
+              tempatLahir: g.tempatLahir || "",
+              tanggalLahir: g.tanggalLahir || "1980-01-01",
+              alamat: g.alamat || "",
+              noHP: g.noHP || "",
+              email: g.email,
+              status: g.status || "AKTIF",
+              jabatan: g.jabatan || "",
+              mataPelajaran: g.mataPelajaran || "",
+              password: g.password || defaultPasswordHash,
+              foto: null,
+              qrCode: `GURU-QR-${g.NIP}-${g.NIK}`,
+            }
+          });
+          guruId = created.id;
+        }
+
+        // Ensure user account exists
+        let user = await prisma.user.findFirst({
+          where: { email: g.email }
+        });
+
+        if (!user) {
+          const hashedPassword = await bcrypt.hash("guru123", 10);
+          const newUser = await prisma.user.create({
+            data: {
+              email: g.email,
+              password: hashedPassword,
+              role: "GURU",
+            }
+          });
+          
+          // Link User to Guru
+          await prisma.guru.update({
+            where: { id: guruId },
+            data: { userId: newUser.id }
+          });
+        } else if (existingGuru && !existingGuru.userId) {
+          // Link existing User to Guru if not linked
+          await prisma.guru.update({
+            where: { id: guruId },
+            data: { userId: user.id }
+          });
+        }
+      }
+    }
+
+    res.json({ success: true, message: "Database guru dan konfigurasi berhasil disinkronkan!" });
+  } catch (err: any) {
+    res.status(500).json({ error: "Gagal mengimpor data sinkronisasi: " + err.message });
+  }
+});
+
 // --- AUTHENTICATION ENDPOINTS ---
 
 app.post("/api/auth/login", async (req, res) => {

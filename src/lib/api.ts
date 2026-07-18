@@ -877,3 +877,86 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     return mockFetch(endpoint, options);
   }
 }
+
+// Compact payload representation for sharing via URL parameters securely and compactly.
+export function encodeSyncPayload(payload: any): string {
+  try {
+    const compactGurus = (payload.gurus || []).map((g: any) => ({
+      id: g.id,
+      nip: g.NIP,
+      nik: g.NIK,
+      nm: g.nama,
+      em: g.email,
+      jk: g.jenisKelamin,
+      tl: g.tempatLahir,
+      tg: g.tanggalLahir,
+      al: g.alamat,
+      hp: g.noHP || g.telepon || "",
+      jb: g.jabatan || "",
+      mp: g.mataPelajaran || ""
+    }));
+
+    const compact = {
+      sc: payload.school ? { n: payload.school.name, a: payload.school.address } : null,
+      sh: payload.schedule ? { t: payload.schedule.timezone, i: payload.schedule.jamMasuk, o: payload.schedule.jamPulang, l: payload.schedule.jamToleransi } : null,
+      lo: payload.location ? { n: payload.location.name, la: payload.location.latitude, lo: payload.location.longitude, r: payload.location.radius } : null,
+      gu: compactGurus
+    };
+
+    const jsonStr = JSON.stringify(compact);
+    const utf8Bytes = new TextEncoder().encode(jsonStr);
+    let binStr = "";
+    for (let i = 0; i < utf8Bytes.length; i++) {
+      binStr += String.fromCharCode(utf8Bytes[i]);
+    }
+    return window.btoa(binStr)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  } catch (err) {
+    console.error("Error encoding sync payload:", err);
+    return "";
+  }
+}
+
+export function decodeSyncPayload(str: string): any {
+  try {
+    let base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const binStr = window.atob(base64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) {
+      bytes[i] = binStr.charCodeAt(i);
+    }
+    const jsonStr = new TextDecoder().decode(bytes);
+    const compact = JSON.parse(jsonStr);
+
+    const fullGurus = (compact.gu || []).map((g: any) => ({
+      id: g.id,
+      NIP: g.nip,
+      NIK: g.nik,
+      nama: g.nm,
+      email: g.em,
+      jenisKelamin: g.jk,
+      tempatLahir: g.tl,
+      tanggalLahir: g.tg,
+      alamat: g.al,
+      noHP: g.hp,
+      jabatan: g.jb,
+      mataPelajaran: g.mp,
+      statusVerifikasi: false
+    }));
+
+    return {
+      school: compact.sc ? { name: compact.sc.n, address: compact.sc.a } : null,
+      schedule: compact.sh ? { timezone: compact.sh.t, jamMasuk: compact.sh.i, jamPulang: compact.sh.o, jamToleransi: compact.sh.l } : null,
+      location: compact.lo ? { name: compact.lo.n, latitude: compact.lo.la, longitude: compact.lo.lo, radius: compact.lo.r } : null,
+      gurus: fullGurus
+    };
+  } catch (err) {
+    console.error("Error decoding sync payload:", err);
+    return null;
+  }
+}
