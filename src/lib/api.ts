@@ -529,7 +529,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     if (!curUser) throw new Error("Anda tidak terautentikasi.");
 
     const gurus = getTable("_mock_gurus");
-    const guru = gurus.find((g: any) => g.userId === curUser.id);
+    const guru = gurus.find((g: any) => g.id === curUser.id || g.userId === curUser.id || g.email === curUser.email);
     if (!guru) throw new Error("Profil guru tidak ditemukan untuk akun ini.");
 
     const schedule = getSingleObj("_mock_schedule");
@@ -722,7 +722,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     if (!curUser) throw new Error("Anda tidak terautentikasi.");
 
     const gurus = getTable("_mock_gurus");
-    const guru = gurus.find((g: any) => g.userId === curUser.id);
+    const guru = gurus.find((g: any) => g.id === curUser.id || g.userId === curUser.id || g.email === curUser.email);
     if (!guru) throw new Error("Profil guru tidak ditemukan.");
 
     const list = getTable("_mock_attendances");
