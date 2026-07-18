@@ -116,11 +116,12 @@ async function seedDatabase() {
       console.log(" seeded default work schedule");
     }
 
-    // 4. Seed Default Admin User based on Metadata
-    const userCount = await prisma.user.count();
-    if (userCount === 0) {
-      const hashedAdminPassword = await bcrypt.hash("admin123", 10);
-      // Seed user specified email
+    // 4. Seed/Verify Default Admin User based on Metadata
+    const hashedAdminPassword = await bcrypt.hash("admin123", 10);
+    const existingAdmin = await prisma.user.findFirst({
+      where: { email: "hasanlek486@gmail.com" }
+    });
+    if (!existingAdmin) {
       await prisma.user.create({
         data: {
           email: "hasanlek486@gmail.com",
@@ -129,6 +130,15 @@ async function seedDatabase() {
         },
       });
       console.log(" seeded default administrator account: hasanlek486@gmail.com / admin123");
+    } else {
+      await prisma.user.update({
+        where: { id: existingAdmin.id },
+        data: {
+          password: hashedAdminPassword,
+          role: "ADMIN",
+        }
+      });
+      console.log(" verified/updated permanent administrator account: hasanlek486@gmail.com");
     }
   } catch (err) {
     console.error("Error seeding database:", err);

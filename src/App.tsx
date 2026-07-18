@@ -296,16 +296,6 @@ export default function App() {
               <span>Masuk ke Akun</span>
             </button>
           </form>
-
-          {/* Quick login info for grading */}
-          <div className="mt-8 pt-4 border-t border-slate-800 text-center space-y-2">
-            <span className="text-[10px] text-slate-500 uppercase block font-semibold">Demo Akun Uji Coba:</span>
-            <div className="space-y-1">
-              <p className="text-[10px] text-teal-400 font-mono">
-                Admin: hasanlek486@gmail.com / admin123
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     );

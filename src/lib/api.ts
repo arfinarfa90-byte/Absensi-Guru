@@ -127,7 +127,7 @@ function initMockData() {
       {
         id: "admin-1",
         email: "hasanlek486@gmail.com",
-        name: "Administrator (Uji Coba)",
+        name: "Administrator Utama",
         role: "ADMIN"
       }
     ]));
@@ -165,7 +165,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     const token = getAuthToken();
     if (!token) return null;
     if (token === "mock-token-admin-1") {
-      return { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator (Uji Coba)", role: "ADMIN" };
+      return { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator Utama", role: "ADMIN" };
     }
     if (token.startsWith("mock-token-")) {
       const userId = token.replace("mock-token-", "");
@@ -205,7 +205,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     const passwordTrimmed = (body.password || "").trim();
 
     if (emailLower === "hasanlek486@gmail.com" && passwordTrimmed === "admin123") {
-      const user = { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator (Uji Coba)", role: "ADMIN" };
+      const user = { id: "admin-1", email: "hasanlek486@gmail.com", name: "Administrator Utama", role: "ADMIN" };
       return { token: "mock-token-admin-1", user };
     }
     
