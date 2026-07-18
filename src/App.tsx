@@ -296,6 +296,12 @@ export default function App() {
               <span>Masuk ke Akun</span>
             </button>
           </form>
+
+          {/* Developer Credit Footer */}
+          <div className="mt-6 pt-4 border-t border-slate-850 text-center">
+            <span className="text-[9px] text-slate-500 uppercase block font-semibold tracking-wider">Pengembang Aplikasi</span>
+            <p className="text-xs font-semibold text-teal-400 mt-0.5">Arfin Arfa, ST</p>
+          </div>
         </div>
       </div>
     );

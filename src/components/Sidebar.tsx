@@ -170,6 +170,13 @@ export default function Sidebar({
             </div>
           )}
         </button>
+
+        {!collapsed && (
+          <div className="mt-3 px-3 py-1.5 rounded-lg bg-slate-950/40 border border-slate-900/50 text-[10px] text-slate-400 leading-normal text-center">
+            <span className="block text-slate-500">Pengembang Sistem:</span>
+            <span className="font-semibold text-teal-400">Arfin Arfa, ST</span>
+          </div>
+        )}
       </div>
     </aside>
   );
