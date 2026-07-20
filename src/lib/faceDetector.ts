@@ -1,25 +1,36 @@
 import * as faceapi from "@vladmandic/face-api";
 
 let modelsLoaded = false;
-const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+const MODEL_URLS = [
+  "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/",
+  "https://unpkg.com/@vladmandic/face-api/model/",
+  "https://cdn.jsdelivr.net/gh/vladmandic/face-api@master/model/",
+  "https://raw.githubusercontent.com/vladmandic/face-api/master/model/"
+];
 
 export async function loadFaceApiModels() {
   if (modelsLoaded) return true;
 
-  try {
-    // Load Tiny Face Detector, Landmarks, and Face Recognition models
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-    modelsLoaded = true;
-    console.log("FaceAPI models loaded successfully from CDN");
-    return true;
-  } catch (err) {
-    console.error("Failed to load FaceAPI models from CDN", err);
-    throw new Error("Gagal mengunduh model pengenalan wajah dari CDN. Periksa koneksi internet Anda.");
+  let lastError = null;
+  for (const url of MODEL_URLS) {
+    try {
+      console.log(`Mencoba memuat model FaceAPI dari: ${url}`);
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(url),
+        faceapi.nets.faceLandmark68Net.loadFromUri(url),
+        faceapi.nets.faceRecognitionNet.loadFromUri(url),
+      ]);
+      modelsLoaded = true;
+      console.log(`Model FaceAPI berhasil dimuat dari: ${url}`);
+      return true;
+    } catch (err) {
+      console.warn(`Gagal memuat model dari ${url}, mencoba CDN berikutnya...`, err);
+      lastError = err;
+    }
   }
+
+  console.error("Semua CDN model FaceAPI gagal dimuat.", lastError);
+  throw new Error("Gagal mengunduh model pengenalan wajah dari CDN. Periksa koneksi internet Anda.");
 }
 
 // Compare two 128-dimensional embedding vectors (Euclidean distance)
