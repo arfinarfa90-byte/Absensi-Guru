@@ -603,7 +603,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 
   // --- 8. STATS ADMIN ---
   if (path === "/stats/admin" && method === "GET") {
-    const gurus = getTable("_mock_gurus").filter((g: any) => g.status === true);
+    const gurus = getTable("_mock_gurus").filter((g: any) => g.status !== "NON_AKTIF");
     const list = getTable("_mock_attendances");
 
     const schedule = getSingleObj("_mock_schedule");
