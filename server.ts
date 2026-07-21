@@ -179,16 +179,36 @@ app.get("/api/sync/export", async (req, res) => {
     const school = await prisma.school.findFirst();
     const schedule = await prisma.schedule.findFirst();
     const location = await prisma.location.findFirst();
-    const gurus = await prisma.guru.findMany();
+    const gurus = await prisma.guru.findMany({
+      include: {
+        embeddings: true
+      }
+    });
 
     res.json({
       school,
       schedule,
       location,
-      gurus: gurus.map(g => ({
-        ...g,
-        foto: null // Keep payload small to avoid long URLs
-      }))
+      gurus: gurus.map(g => {
+        const parsedEmbeddings = (g.embeddings || []).map((e: any) => {
+          let parsedEmb = [];
+          try {
+            parsedEmb = typeof e.embedding === "string" ? JSON.parse(e.embedding) : e.embedding;
+          } catch (err) {
+            console.error("Error parsing embedding string:", err);
+          }
+          return {
+            expression: e.expression,
+            embedding: parsedEmb
+          };
+        });
+
+        return {
+          ...g,
+          foto: null, // Keep payload small to avoid long URLs
+          embeddings: parsedEmbeddings
+        };
+      })
     });
   } catch (err: any) {
     res.status(500).json({ error: "Gagal mengekspor data sinkronisasi: " + err.message });
@@ -308,6 +328,7 @@ app.post("/api/sync/import", async (req, res) => {
               status: g.status || existingGuru.status || "AKTIF",
               jabatan: g.jabatan || existingGuru.jabatan || "",
               mataPelajaran: g.mataPelajaran || existingGuru.mataPelajaran || "",
+              faceID: g.faceID || existingGuru.faceID || null,
             }
           });
         } else {
@@ -330,9 +351,25 @@ app.post("/api/sync/import", async (req, res) => {
               password: g.password || defaultPasswordHash,
               foto: null,
               qrCode: `GURU-QR-${g.NIP}-${g.NIK}`,
+              faceID: g.faceID || null,
             }
           });
           guruId = created.id;
+        }
+
+        // Import corresponding face embeddings
+        if (g.embeddings && Array.isArray(g.embeddings) && g.embeddings.length > 0) {
+          await prisma.faceEmbedding.deleteMany({
+            where: { guruId: guruId }
+          });
+
+          const createEmbeddings = g.embeddings.map((item: any) => ({
+            guruId: guruId,
+            expression: item.expression,
+            embedding: typeof item.embedding === "string" ? item.embedding : JSON.stringify(item.embedding),
+          }));
+
+          await prisma.faceEmbedding.createMany({ data: createEmbeddings });
         }
 
         // Ensure user account exists

@@ -951,7 +951,12 @@ export function encodeSyncPayload(payload: any): string {
       al: g.alamat,
       hp: g.noHP || g.telepon || "",
       jb: g.jabatan || "",
-      mp: g.mataPelajaran || ""
+      mp: g.mataPelajaran || "",
+      fId: g.faceID || "",
+      eb: g.embeddings ? g.embeddings.map((item: any) => ({
+        ex: item.expression,
+        em: item.embedding ? item.embedding.map((val: number) => Math.round(val * 10000) / 10000) : []
+      })) : [],
     }));
 
     const compact = {
@@ -1004,7 +1009,12 @@ export function decodeSyncPayload(str: string): any {
       noHP: g.hp,
       jabatan: g.jb,
       mataPelajaran: g.mp,
-      statusVerifikasi: false
+      statusVerifikasi: false,
+      faceID: g.fId || null,
+      embeddings: g.eb ? g.eb.map((item: any) => ({
+        expression: item.ex,
+        embedding: item.em
+      })) : []
     }));
 
     return {
