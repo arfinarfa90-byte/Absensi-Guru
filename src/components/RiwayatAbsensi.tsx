@@ -42,7 +42,21 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
     date: new Date().toISOString().split("T")[0],
     status: "HADIR",
     notes: "",
+    jamMasuk: "",
+    jamPulang: "",
   });
+
+  const openManualModal = () => {
+    setManualData({
+      guruId: "",
+      date: new Date().toISOString().split("T")[0],
+      status: "HADIR",
+      notes: "",
+      jamMasuk: "",
+      jamPulang: "",
+    });
+    setShowManualModal(true);
+  };
 
   const loadLogsAndGurus = async () => {
     try {
@@ -229,7 +243,7 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
 
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setShowManualModal(true)}
+            onClick={openManualModal}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition"
           >
             <Plus className="w-4 h-4 text-teal-400" /> Presensi Manual
@@ -442,6 +456,33 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                   <option value="SAKIT">SAKIT</option>
                   <option value="ALPHA">ALPHA</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                    <span>Jam Masuk</span>
+                    <span className="text-[9px] font-normal text-slate-500">(Opsional)</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={manualData.jamMasuk}
+                    onChange={(e) => setManualData({ ...manualData, jamMasuk: e.target.value })}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-teal-500/50"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                    <span>Jam Pulang</span>
+                    <span className="text-[9px] font-normal text-slate-500">(Opsional)</span>
+                  </label>
+                  <input
+                    type="time"
+                    value={manualData.jamPulang}
+                    onChange={(e) => setManualData({ ...manualData, jamPulang: e.target.value })}
+                    className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500/50"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">

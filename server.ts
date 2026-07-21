@@ -1070,7 +1070,7 @@ app.get("/api/attendance", authenticateToken, requireAdmin, async (req, res) => 
 
 // Create manual attendance (Admin overriding, e.g. Izin/Sakit/Alpha)
 app.post("/api/attendance/manual", authenticateToken, requireAdmin, async (req: any, res) => {
-  const { guruId, date, status, notes } = req.body; // status: "IZIN", "SAKIT", "ALPHA", "HADIR"
+  const { guruId, date, status, notes, jamMasuk, jamPulang } = req.body; // status: "IZIN", "SAKIT", "ALPHA", "HADIR"
   if (!guruId || !date || !status) {
     return res.status(400).json({ error: "Guru, Tanggal, dan Status wajib diisi." });
   }
@@ -1078,6 +1078,16 @@ app.post("/api/attendance/manual", authenticateToken, requireAdmin, async (req: 
   try {
     const guru = await prisma.guru.findUnique({ where: { id: guruId } });
     if (!guru) return res.status(404).json({ error: "Guru tidak ditemukan." });
+
+    // Helper to format HH:MM to HH:MM:SS
+    const formatTime = (t: string | null | undefined) => {
+      if (!t || t.trim() === "") return null;
+      if (t.length === 5) return `${t}:00`;
+      return t;
+    };
+
+    const finalJamMasuk = formatTime(jamMasuk) || (status === "HADIR" ? "07:00:00" : null);
+    const finalJamPulang = formatTime(jamPulang);
 
     // Check if entry already exists for that date
     const existing = await prisma.attendance.findFirst({
@@ -1088,7 +1098,12 @@ app.post("/api/attendance/manual", authenticateToken, requireAdmin, async (req: 
       // Update existing record
       await prisma.attendance.update({
         where: { id: existing.id },
-        data: { status, alamat: notes || `Diperbarui Manual oleh Admin` },
+        data: { 
+          status, 
+          alamat: notes || `Diperbarui Manual oleh Admin`,
+          jamMasuk: finalJamMasuk,
+          jamPulang: finalJamPulang,
+        },
       });
     } else {
       // Create new
@@ -1098,7 +1113,8 @@ app.post("/api/attendance/manual", authenticateToken, requireAdmin, async (req: 
           date,
           status,
           alamat: notes || `Dicatat Manual oleh Admin`,
-          jamMasuk: status === "HADIR" ? "07:00:00" : undefined,
+          jamMasuk: finalJamMasuk,
+          jamPulang: finalJamPulang,
         },
       });
     }

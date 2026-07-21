@@ -501,25 +501,45 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 
   // Manual Attendance Create
   if (path === "/attendance/manual" && method === "POST") {
-    const { guruId, date, status, jamMasuk, jamPulang, keterangan } = body;
+    const { guruId, date, status, jamMasuk, jamPulang, keterangan, notes } = body;
     const list = getTable("_mock_attendances");
-    const id = "att-manual-" + Date.now();
+    
+    // Check if entry already exists for that date and guru
+    const existingIdx = list.findIndex((x: any) => x.guruId === guruId && x.date === date);
+    
+    const finalJamMasuk = jamMasuk || (status === "HADIR" ? "07:00" : null);
+    const finalJamPulang = jamPulang || null;
+    const finalAlamat = notes || keterangan || "Dibuat secara Manual oleh Admin";
 
-    const newLog = {
-      id,
-      date,
-      status,
-      jamMasuk: jamMasuk || null,
-      jamPulang: jamPulang || null,
-      alamat: keterangan || "Dibuat secara Manual oleh Admin",
-      guruId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    if (existingIdx !== -1) {
+      list[existingIdx] = {
+        ...list[existingIdx],
+        status,
+        jamMasuk: finalJamMasuk,
+        jamPulang: finalJamPulang,
+        alamat: finalAlamat,
+        updatedAt: new Date().toISOString()
+      };
+      saveTable("_mock_attendances", list);
+      return list[existingIdx];
+    } else {
+      const id = "att-manual-" + Date.now();
+      const newLog = {
+        id,
+        date,
+        status,
+        jamMasuk: finalJamMasuk,
+        jamPulang: finalJamPulang,
+        alamat: finalAlamat,
+        guruId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
-    list.push(newLog);
-    saveTable("_mock_attendances", list);
-    return newLog;
+      list.push(newLog);
+      saveTable("_mock_attendances", list);
+      return newLog;
+    }
   }
 
   // Submit Real-time Attendance via Camera/GPS
