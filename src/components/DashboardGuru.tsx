@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { apiFetch } from "../lib/api";
 import {
   Clock,
@@ -41,6 +41,123 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
   const [showScanner, setShowScanner] = useState(false);
   const [scanType, setScanType] = useState<"masuk" | "pulang">("masuk");
   const [teacherProfile, setTeacherProfile] = useState<any>(null);
+
+  // Manual Attendance States
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualType, setManualType] = useState<"masuk" | "pulang">("masuk");
+  const [manualNotes, setManualNotes] = useState("");
+  const [customManualNotes, setCustomManualNotes] = useState("");
+  const [manualSelfie, setManualSelfie] = useState<string | null>(null);
+  const [submittingManual, setSubmittingManual] = useState(false);
+  const [showSimpleVideo, setShowSimpleVideo] = useState(false);
+
+  const simpleVideoRef = useRef<HTMLVideoElement | null>(null);
+  const simpleStreamRef = useRef<MediaStream | null>(null);
+
+  const startSimpleSelfieCapture = async () => {
+    try {
+      setShowSimpleVideo(true);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      simpleStreamRef.current = stream;
+      setTimeout(() => {
+        if (simpleVideoRef.current) {
+          simpleVideoRef.current.srcObject = stream;
+        }
+      }, 300);
+    } catch (err) {
+      alert("Gagal mengakses kamera perangkat Anda.");
+    }
+  };
+
+  const stopSimpleSelfieStream = () => {
+    if (simpleStreamRef.current) {
+      simpleStreamRef.current.getTracks().forEach((track) => track.stop());
+      simpleStreamRef.current = null;
+    }
+    setShowSimpleVideo(false);
+  };
+
+  const takeSimpleSelfie = () => {
+    if (simpleVideoRef.current) {
+      const video = simpleVideoRef.current;
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        // Draw flipped image
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg");
+        setManualSelfie(dataUrl);
+      }
+      stopSimpleSelfieStream();
+    }
+  };
+
+  const handleManualFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setManualSelfie(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalReason = manualNotes === "Lainnya" ? customManualNotes : manualNotes;
+    if (!finalReason) {
+      alert("Silakan pilih atau isi alasan/keterangan kendala.");
+      return;
+    }
+
+    try {
+      setSubmittingManual(true);
+
+      const ua = navigator.userAgent;
+      let browserName = "Chrome";
+      if (ua.indexOf("Firefox") > -1) browserName = "Firefox";
+      else if (ua.indexOf("Safari") > -1 && ua.indexOf("Chrome") === -1) browserName = "Safari";
+      else if (ua.indexOf("Edge") > -1) browserName = "Edge";
+      const deviceName = /Mobi|Android|iPhone/i.test(ua) ? "Mobile Smartphone" : "Desktop PC";
+
+      // Submit manual attendance request
+      const response = await apiFetch("/attendance/submit", {
+        method: "POST",
+        body: JSON.stringify({
+          type: manualType,
+          latitude: userCoords?.lat || null,
+          longitude: userCoords?.lng || null,
+          selfie: manualSelfie,
+          device: deviceName + " (Manual)",
+          browser: browserName,
+          isManual: true,
+          notes: finalReason,
+        }),
+      });
+
+      onSuccessToast(response.message || "Presensi manual Anda berhasil disimpan!");
+      setShowManualModal(false);
+      await loadStatsAndConfigs();
+    } catch (err: any) {
+      alert(err.message || "Gagal melakukan presensi manual.");
+    } finally {
+      setSubmittingManual(false);
+    }
+  };
+
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      if (simpleStreamRef.current) {
+        simpleStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   // Update Clock
   useEffect(() => {
@@ -215,6 +332,14 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
             registeredEmbeddings={teacherProfile.embeddings || []}
             onSuccess={handleScanSuccess}
             onCancel={() => setShowScanner(false)}
+            onManualTrigger={() => {
+              setShowScanner(false);
+              setManualType(stats.absensiMasukCatat === "--:--:--" ? "masuk" : "pulang");
+              setManualNotes("");
+              setCustomManualNotes("");
+              setManualSelfie(null);
+              setShowManualModal(true);
+            }}
           />
         </div>
       )}
@@ -349,7 +474,203 @@ export default function DashboardGuru({ onSuccessToast }: DashboardGuruProps) {
               <span>Absen Pulang</span>
             </button>
           </div>
+
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800/85 pt-4">
+            <span className="text-[11px] text-slate-400">Kendala pemindaian wajah atau belum registrasi wajah?</span>
+            <button
+              onClick={() => {
+                setManualType(stats.absensiMasukCatat === "--:--:--" ? "masuk" : "pulang");
+                setManualNotes("");
+                setCustomManualNotes("");
+                setManualSelfie(null);
+                setShowManualModal(true);
+              }}
+              className="self-start px-3 py-1.5 bg-slate-800 hover:bg-slate-750 text-teal-400 hover:text-teal-300 rounded-lg text-xs font-semibold border border-slate-700 transition animate-pulse"
+            >
+              Ajukan Absensi Manual
+            </button>
+          </div>
         </div>
+
+        {/* Manual Attendance Modal */}
+        {showManualModal && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute -top-12 -left-12 w-32 h-32 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                <h3 className="font-bold text-base text-white">Formulir Absensi Manual</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopSimpleSelfieStream();
+                    setShowManualModal(false);
+                  }}
+                  className="text-slate-400 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleManualSubmit} className="space-y-4 text-left">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Jenis Absensi
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setManualType("masuk")}
+                      disabled={stats.absensiMasukCatat !== "--:--:--"}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition ${
+                        manualType === "masuk"
+                          ? "bg-teal-500/25 border-teal-500 text-teal-300"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      } ${stats.absensiMasukCatat !== "--:--:--" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      Masuk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualType("pulang")}
+                      disabled={stats.absensiMasukCatat === "--:--:--" || stats.absensiPulangCatat !== "--:--:--"}
+                      className={`py-2 px-3 rounded-lg text-xs font-bold border transition ${
+                        manualType === "pulang"
+                          ? "bg-indigo-500/25 border-indigo-500 text-indigo-300"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      } ${
+                        (stats.absensiMasukCatat === "--:--:--" || stats.absensiPulangCatat !== "--:--:--")
+                          ? "opacity-50 cursor-not-allowed"
+                          : ""
+                      }`}
+                    >
+                      Pulang
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Keterangan Kendala Wajah
+                  </label>
+                  <select
+                    value={manualNotes}
+                    onChange={(e) => setManualNotes(e.target.value)}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white focus:outline-none focus:border-teal-500"
+                  >
+                    <option value="">-- Pilih Keterangan Kendala --</option>
+                    <option value="Belum melakukan registrasi wajah (Kendala Vercel / Sync)">Belum melakukan registrasi wajah (Kendala Vercel / Sync)</option>
+                    <option value="Wajah tidak terdeteksi oleh kamera (Akurasi Rendah)">Wajah tidak terdeteksi oleh kamera (Akurasi Rendah)</option>
+                    <option value="Kamera perangkat tidak terdeteksi atau error">Kamera perangkat tidak terdeteksi atau error</option>
+                    <option value="Kamera lambat memindai / tidak merespons">Kamera lambat memindai / tidak merespons</option>
+                    <option value="Lainnya">Lainnya (Tulis alasan sendiri)</option>
+                  </select>
+                </div>
+
+                {manualNotes === "Lainnya" && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                      Tulis Alasan/Kendala
+                    </label>
+                    <textarea
+                      required
+                      placeholder="Contoh: Kesalahan registrasi wajah terhapus saat berpindah server/Vercel..."
+                      rows={3}
+                      value={customManualNotes}
+                      onChange={(e) => setCustomManualNotes(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                )}
+
+                {/* Simple capture */}
+                <div className="border border-slate-800/80 rounded-xl p-3 bg-slate-950/40">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Foto Bukti Kehadiran (Opsional)
+                  </span>
+
+                  {manualSelfie ? (
+                    <div className="relative aspect-video w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
+                      <img src={manualSelfie} className="w-full h-full object-cover" alt="Manual selfie proof" />
+                      <button
+                        type="button"
+                        onClick={() => setManualSelfie(null)}
+                        className="absolute top-2 right-2 bg-rose-600 hover:bg-rose-500 text-white p-1 rounded-full text-xs"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-800 rounded-lg text-center space-y-2">
+                      <Camera className="w-6 h-6 text-slate-600" />
+                      <p className="text-[10px] text-slate-500 leading-normal max-w-xs">
+                        Ambil foto selfie langsung dari kamera perangkat (tanpa pemindai AI) sebagai lampiran bukti kehadiran fisik Anda.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={startSimpleSelfieCapture}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-medium border border-slate-700"
+                        >
+                          Aktifkan Kamera
+                        </button>
+                        <label className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-medium border border-slate-700 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleManualFile}
+                          />
+                          <span>Pilih Berkas</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {showSimpleVideo && (
+                    <div className="mt-3 relative aspect-video w-full bg-slate-950 rounded-lg overflow-hidden border border-slate-850 flex items-center justify-center">
+                      <video
+                        ref={simpleVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover transform -scale-x-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={takeSimpleSelfie}
+                        className="absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-teal-400 hover:bg-teal-300 text-slate-950 font-bold px-3 py-1 rounded-full text-[10px] shadow-lg transition"
+                      >
+                        Ambil Foto
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopSimpleSelfieStream();
+                      setShowManualModal(false);
+                    }}
+                    className="px-4 py-2 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingManual}
+                    className="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-600 hover:to-indigo-700 rounded-lg shadow-lg transition flex items-center gap-1"
+                  >
+                    {submittingManual ? "Mengirim..." : "Kirim Absensi"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* GPS Satellite details card */}
         <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 shadow-xl backdrop-blur-md flex flex-col justify-between">

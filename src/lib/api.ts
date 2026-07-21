@@ -582,7 +582,7 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
 
   // Submit Real-time Attendance via Camera/GPS
   if (path === "/attendance/submit" && method === "POST") {
-    const { type, foto } = body;
+    const { type, foto, selfie, isManual, notes } = body;
     const curUser = getCurrentUser();
     if (!curUser) throw new Error("Anda tidak terautentikasi.");
 
@@ -601,6 +601,8 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     const timeStr = now.toLocaleTimeString("en-GB", { timeZone: ianaTz, hour12: false });
 
     const list = getTable("_mock_attendances");
+
+    const finalFoto = selfie || foto || null;
 
     if (type === "masuk") {
       const alreadyCheckedIn = list.some((l: any) => l.guruId === guru.id && l.date === dateStr);
@@ -626,8 +628,10 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
         jamMasuk: timeStr,
         jamPulang: null,
         status: finalStatus,
-        alamat: "Dalam Area Sekolah (Satelit GPS)",
-        fotoMasuk: foto || null,
+        alamat: isManual 
+          ? `Absensi Manual Guru (Sebab: ${notes || "Data wajah belum terdaftar/terbaca"})`
+          : "Dalam Area Sekolah (Satelit GPS)",
+        fotoMasuk: finalFoto,
         guruId: guru.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -648,7 +652,10 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
       }
 
       log.jamPulang = timeStr;
-      log.fotoPulang = foto || null;
+      log.fotoPulang = finalFoto || log.fotoMasuk;
+      if (isManual) {
+        log.alamat = `${log.alamat ? log.alamat + " | " : ""}Absen Manual Pulang (Sebab: ${notes || "Data wajah belum terdaftar/terbaca"})`;
+      }
       log.updatedAt = new Date().toISOString();
 
       list[existingLogIdx] = log;

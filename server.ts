@@ -896,7 +896,7 @@ app.put("/api/school", authenticateToken, requireAdmin, async (req: any, res) =>
 // --- ATTENDANCE SYSTEM ---
 
 app.post("/api/attendance/submit", authenticateToken, async (req: any, res) => {
-  const { type, latitude, longitude, selfie, ip, device, browser, address } = req.body;
+  const { type, latitude, longitude, selfie, ip, device, browser, address, isManual, notes } = req.body;
   const guruId = req.user.id;
 
   if (req.user.role !== "GURU") {
@@ -915,7 +915,7 @@ app.post("/api/attendance/submit", authenticateToken, async (req: any, res) => {
 
     // 1. Get location configuration
     const schoolLoc = await prisma.location.findFirst();
-    if (schoolLoc && latitude && longitude) {
+    if (schoolLoc && latitude && longitude && !isManual) {
       const distance = calculateGPSDistance(
         parseFloat(latitude),
         parseFloat(longitude),
@@ -965,6 +965,10 @@ app.post("/api/attendance/submit", authenticateToken, async (req: any, res) => {
         finalStatus = "TERLAMBAT";
       }
 
+      const alamatManual = isManual
+        ? `Absensi Manual Guru (Sebab: ${notes || "Data wajah belum terdaftar/terbaca"})`
+        : (address || "Koordinat Sekolah");
+
       // Create attendance log
       const newLog = await prisma.attendance.create({
         data: {
@@ -973,22 +977,22 @@ app.post("/api/attendance/submit", authenticateToken, async (req: any, res) => {
           jamMasuk: nowTime,
           latitude: latitude ? parseFloat(latitude) : null,
           longitude: longitude ? parseFloat(longitude) : null,
-          alamat: address || "Koordinat Sekolah",
+          alamat: alamatManual,
           ip: ip || req.ip,
-          device: device || "Web Portal",
+          device: device || "Web Portal (Manual)",
           browser: browser || "Chrome",
           selfie: selfie || null,
           status: finalStatus,
         },
       });
 
-      await logActivity(guru.email, "ATTENDANCE_IN", `Absen Masuk Berhasil: ${finalStatus}`, req.ip);
+      await logActivity(guru.email, "ATTENDANCE_IN", `Absen Masuk Berhasil: ${finalStatus}${isManual ? " (MANUAL)" : ""}`, req.ip);
 
       // Create internal notification
       await prisma.notification.create({
         data: {
-          title: "Absen Masuk Berhasil",
-          message: `${guru.nama} berhasil absen masuk jam ${nowTime} dengan status ${finalStatus}.`,
+          title: isManual ? "Absen Masuk Manual Berhasil" : "Absen Masuk Berhasil",
+          message: `${guru.nama} berhasil absen masuk jam ${nowTime} dengan status ${finalStatus}${isManual ? " secara manual karena kendala wajah." : "."}`,
           type: finalStatus === "HADIR" ? "SUCCESS" : "WARNING",
           recipientId: "ADMIN",
         },
@@ -1019,15 +1023,33 @@ app.post("/api/attendance/submit", authenticateToken, async (req: any, res) => {
         return res.status(400).json({ error: "Anda sudah melakukan absensi Pulang hari ini." });
       }
 
+      const alamatManualPulang = isManual
+        ? `${todayLog.alamat ? todayLog.alamat + " | " : ""}Absen Manual Pulang (Sebab: ${notes || "Data wajah belum terdaftar/terbaca"})`
+        : todayLog.alamat;
+
       // Update log
       const updatedLog = await prisma.attendance.update({
         where: { id: todayLog.id },
         data: {
           jamPulang: nowTime,
+          alamat: alamatManualPulang,
+          selfie: selfie || todayLog.selfie,
         },
       });
 
-      await logActivity(guru.email, "ATTENDANCE_OUT", `Absen Pulang Berhasil jam ${nowTime}`, req.ip);
+      await logActivity(guru.email, "ATTENDANCE_OUT", `Absen Pulang Berhasil jam ${nowTime}${isManual ? " (MANUAL)" : ""}`, req.ip);
+
+      // Create internal notification for manual check out
+      if (isManual) {
+        await prisma.notification.create({
+          data: {
+            title: "Absen Pulang Manual Berhasil",
+            message: `${guru.nama} berhasil absen pulang jam ${nowTime} secara manual karena kendala wajah.`,
+            type: "INFO",
+            recipientId: "ADMIN",
+          },
+        });
+      }
 
       return res.json({
         success: true,

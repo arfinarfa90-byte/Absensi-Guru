@@ -9,6 +9,7 @@ interface CameraRecognitionProps {
   onSuccess: (data: { selfie: string; embeddings?: any[] }) => void;
   onCancel: () => void;
   registeredEmbeddings?: { expression: string; embedding: string }[]; // for verification
+  onManualTrigger?: () => void; // fallback for manual attendance
 }
 
 type RegistrationStep = {
@@ -33,6 +34,7 @@ export default function CameraRecognition({
   onSuccess,
   onCancel,
   registeredEmbeddings = [],
+  onManualTrigger,
 }: CameraRecognitionProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -709,14 +711,40 @@ export default function CameraRecognition({
 
             {/* Warning Message */}
             {warningMsg && (
-              <div className="bg-amber-950/30 border border-amber-800/50 text-amber-300 text-xs py-2 px-3 rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                <span>{warningMsg}</span>
+              <div className="bg-amber-950/30 border border-amber-800/50 text-amber-300 text-xs py-2 px-3 rounded-lg flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>{warningMsg}</span>
+                </div>
+                {mode === "verify" && onManualTrigger && warningMsg.includes("belum terdaftar") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      onManualTrigger();
+                    }}
+                    className="self-start text-xs text-white bg-amber-800 hover:bg-amber-700 font-medium px-2.5 py-1 rounded transition mt-1"
+                  >
+                    Lanjutkan Absensi Manual (Kendala Wajah)
+                  </button>
+                )}
               </div>
             )}
 
             {/* Cancel Actions */}
             <div className="flex justify-end pt-2 gap-2">
+              {mode === "verify" && onManualTrigger && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopCamera();
+                    onManualTrigger();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-teal-500 to-indigo-600 hover:from-teal-600 hover:to-indigo-700 rounded-lg shadow-lg transition"
+                >
+                  Absensi Manual
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
