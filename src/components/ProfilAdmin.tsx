@@ -32,6 +32,7 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
     return localStorage.getItem("attendance_api_url") || "";
   });
   const [copied, setCopied] = useState(false);
+  const [shortening, setShortening] = useState(false);
 
   // Form fields
   const [name, setName] = useState("");
@@ -156,7 +157,8 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
 
   const handleCopySharingLink = async () => {
     const activeApi = getBaseUrl();
-    let syncParam = "";
+    let shortCode = "";
+    setShortening(true);
 
     try {
       // Fetch sync data from backend / local mock
@@ -181,20 +183,63 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
       }
 
       if (payload) {
-        syncParam = encodeSyncPayload(payload);
+        // Post the raw payload to shorten API
+        const res = await apiFetch("/sync/shorten", {
+          method: "POST",
+          body: JSON.stringify({ payload })
+        });
+        if (res && res.shortCode) {
+          shortCode = res.shortCode;
+        }
       }
     } catch (err) {
-      console.warn("Failed to get sync payload, generating link without sync param.", err);
+      console.warn("Failed to get short link, generating fallback link.", err);
+    } finally {
+      setShortening(false);
     }
 
-    const sharingUrl = syncParam 
-      ? `${window.location.origin}/?api=${activeApi}&sync=${syncParam}`
-      : `${window.location.origin}/?api=${activeApi}`;
+    let sharingUrl = "";
+    if (shortCode) {
+      sharingUrl = `${window.location.origin}/?api=${activeApi}&s=${shortCode}`;
+    } else {
+      // Fallback to legacy long URL if short link generation failed
+      let syncParam = "";
+      try {
+        let payload;
+        if (getActiveDatabaseMode() === "Local Mock DB") {
+          const getSingleObj = (key: string) => {
+            const val = localStorage.getItem(key);
+            return val ? JSON.parse(val) : null;
+          };
+          const getTable = (key: string) => {
+            const val = localStorage.getItem(key);
+            return val ? JSON.parse(val) : [];
+          };
+          payload = {
+            school: getSingleObj("_mock_school"),
+            schedule: getSingleObj("_mock_schedule"),
+            location: getSingleObj("_mock_location"),
+            gurus: getTable("_mock_gurus"),
+          };
+        } else {
+          payload = await apiFetch("/sync/export");
+        }
+        if (payload) {
+          syncParam = encodeSyncPayload(payload);
+        }
+      } catch (e) {
+        console.error("Fallback payload encoding failed", e);
+      }
+
+      sharingUrl = syncParam 
+        ? `${window.location.origin}/?api=${activeApi}&sync=${syncParam}`
+        : `${window.location.origin}/?api=${activeApi}`;
+    }
     
     try {
       navigator.clipboard.writeText(sharingUrl);
       setCopied(true);
-      onSuccessToast("Link berbagi khusus guru disalin beserta data sinkronisasi otomatis!");
+      onSuccessToast("Link berbagi khusus guru berhasil disalin (link pendek)!");
       setTimeout(() => setCopied(false), 3000);
     } catch (e) {
       // Fallback if clipboard API fails
@@ -205,7 +250,7 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
       document.execCommand("copy");
       document.body.removeChild(input);
       setCopied(true);
-      onSuccessToast("Link berbagi berhasil disalin (fallback) beserta data sinkronisasi!");
+      onSuccessToast("Link berbagi berhasil disalin!");
       setTimeout(() => setCopied(false), 3000);
     }
   };
@@ -368,10 +413,20 @@ export default function ProfilAdmin({ onSuccessToast }: ProfilAdminProps) {
               <button
                 type="button"
                 onClick={handleCopySharingLink}
-                className="w-full py-3 bg-gradient-to-r from-teal-400 to-indigo-500 hover:from-teal-500 hover:to-indigo-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+                disabled={shortening}
+                className="w-full py-3 bg-gradient-to-r from-teal-400 to-indigo-500 hover:from-teal-500 hover:to-indigo-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copied ? "Link Berhasil Disalin!" : "Salin Link Berbagi untuk Guru"}</span>
+                {shortening ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Menghubungkan & Memendekkan Link...</span>
+                  </>
+                ) : (
+                  <>
+                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copied ? "Link Berhasil Disalin!" : "Salin Link Berbagi untuk Guru"}</span>
+                  </>
+                )}
               </button>
               <div className="mt-2 text-[10px] font-mono text-slate-500 text-center break-all bg-slate-900 p-2 rounded border border-slate-800">
                 {window.location.origin}/?api={getBaseUrl()}

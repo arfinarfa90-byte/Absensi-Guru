@@ -888,6 +888,29 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     return { success: true, message: "Database Mock berhasil dipulihkan dari data cadangan." };
   }
 
+  // --- 11. SHORT SYNC SYSTEM ---
+  if (path === "/sync/shorten" && method === "POST") {
+    if (!body || !body.payload) {
+      throw new Error("Payload tidak boleh kosong.");
+    }
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let shortCode = "";
+    for (let i = 0; i < 6; i++) {
+      shortCode += chars[Math.floor(Math.random() * chars.length)];
+    }
+    localStorage.setItem(`_mock_short_sync_${shortCode}`, JSON.stringify(body.payload));
+    return { success: true, shortCode };
+  }
+
+  if (path.startsWith("/sync/short/") && method === "GET") {
+    const code = path.replace("/sync/short/", "");
+    const val = localStorage.getItem(`_mock_short_sync_${code}`);
+    if (!val) {
+      throw new Error("Link pendek tidak ditemukan atau sudah kedaluwarsa.");
+    }
+    return { success: true, payload: JSON.parse(val) };
+  }
+
   throw new Error(`Endpoint mock ${method} ${path} belum diimplementasikan.`);
 }
 

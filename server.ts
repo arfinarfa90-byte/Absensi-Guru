@@ -408,6 +408,53 @@ app.post("/api/sync/import", async (req, res) => {
   }
 });
 
+// --- SHORT SYNC LINK SYSTEM ---
+
+app.post("/api/sync/shorten", async (req, res) => {
+  const { payload } = req.body;
+  if (!payload) {
+    return res.status(400).json({ error: "Payload tidak boleh kosong." });
+  }
+
+  try {
+    // Generate a 6 character short code
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let shortCode = "";
+    for (let i = 0; i < 6; i++) {
+      shortCode += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    const key = `short_sync_${shortCode}`;
+    await prisma.settings.upsert({
+      where: { key: key },
+      update: { value: JSON.stringify(payload) },
+      create: { key: key, value: JSON.stringify(payload) }
+    });
+
+    res.json({ success: true, shortCode });
+  } catch (err: any) {
+    res.status(500).json({ error: "Gagal memendekkan link: " + err.message });
+  }
+});
+
+app.get("/api/sync/short/:code", async (req, res) => {
+  const { code } = req.params;
+  try {
+    const key = `short_sync_${code}`;
+    const setting = await prisma.settings.findUnique({
+      where: { key: key }
+    });
+
+    if (!setting) {
+      return res.status(404).json({ error: "Link pendek tidak ditemukan atau sudah kedaluwarsa." });
+    }
+
+    res.json({ success: true, payload: JSON.parse(setting.value) });
+  } catch (err: any) {
+    res.status(500).json({ error: "Gagal mengambil data link pendek: " + err.message });
+  }
+});
+
 // --- AUTHENTICATION ENDPOINTS ---
 
 app.post("/api/auth/login", async (req, res) => {

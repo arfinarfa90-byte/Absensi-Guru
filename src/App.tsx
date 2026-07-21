@@ -79,6 +79,8 @@ export default function App() {
     const handleUrlSync = async () => {
       const params = new URLSearchParams(window.location.search);
       const syncParam = params.get("sync");
+      const shortCode = params.get("s");
+
       if (syncParam) {
         try {
           const decoded = decodeSyncPayload(syncParam);
@@ -127,6 +129,57 @@ export default function App() {
           }
         } catch (err: any) {
           console.error("Failed to decode sync parameter:", err);
+        }
+      } else if (shortCode) {
+        try {
+          triggerToast("Menyinkronkan data guru & jadwal dari server...");
+          const res = await apiFetch(`/sync/short/${shortCode}`);
+          if (res && res.payload) {
+            const decoded = res.payload;
+            
+            if (decoded.school) localStorage.setItem("_mock_school", JSON.stringify(decoded.school));
+            if (decoded.schedule) localStorage.setItem("_mock_schedule", JSON.stringify(decoded.schedule));
+            if (decoded.location) localStorage.setItem("_mock_location", JSON.stringify(decoded.location));
+            if (decoded.gurus) localStorage.setItem("_mock_gurus", JSON.stringify(decoded.gurus));
+
+            const mockUsers = JSON.parse(localStorage.getItem("_mock_users") || "[]");
+            if (decoded.gurus && Array.isArray(decoded.gurus)) {
+              decoded.gurus.forEach((g: any) => {
+                if (!mockUsers.some((u: any) => u.email === g.email)) {
+                  mockUsers.push({
+                    id: "user-guru-" + g.id,
+                    email: g.email,
+                    password: "guru123",
+                    name: g.nama || g.name,
+                    role: "GURU"
+                  });
+                }
+              });
+            }
+            localStorage.setItem("_mock_users", JSON.stringify(mockUsers));
+
+            try {
+              await apiFetch("/sync/import", {
+                method: "POST",
+                body: JSON.stringify(decoded)
+              });
+            } catch (err) {
+              console.warn("Backend sync failed, fallbacked to local mock sync", err);
+            }
+
+            triggerToast("SINKRONISASI SUKSES: Seluruh data guru & pendaftaran wajah berhasil disinkronkan!");
+
+            // Clean up param from address bar
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          }
+        } catch (err: any) {
+          console.error("Gagal mengambil data sinkronisasi link pendek:", err);
+          triggerToast("Gagal menyinkronkan data: " + err.message);
         }
       }
     };

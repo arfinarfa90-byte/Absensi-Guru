@@ -494,7 +494,12 @@ export default function CameraRecognition({
 
                   registeredEmbeddings.forEach((item) => {
                     try {
-                      const savedArr = JSON.parse(item.embedding) as number[];
+                      let savedArr: number[] = [];
+                      if (typeof item.embedding === "string") {
+                        savedArr = JSON.parse(item.embedding) as number[];
+                      } else if (Array.isArray(item.embedding)) {
+                        savedArr = item.embedding;
+                      }
                       const dist = getFaceDistance(currentDescriptor, savedArr);
                       if (dist < minDistance) {
                         minDistance = dist;
