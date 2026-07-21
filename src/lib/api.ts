@@ -929,6 +929,9 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     });
 
     if (!response.ok) {
+      // Check if it is a semantic client validation/auth error (excluding 404 which means routing/infrastructure issue)
+      const isClientError = response.status >= 400 && response.status < 500 && response.status !== 404;
+
       // If it returned 404 (endpoint not found) and we can fallback to mock
       if (response.status === 404) {
         console.warn(`[Switch API] Endpoint ${endpoint} tidak ditemukan (404). Mencoba beralih ke Mock.`);
@@ -939,8 +942,17 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+        const err = new Error(errorData.error || `Request failed with status ${response.status}`);
+        if (isClientError) {
+          (err as any).isClientError = true;
+        }
+        throw err;
       } else {
+        if (isClientError) {
+          const err = new Error(`Request failed with status ${response.status}`);
+          (err as any).isClientError = true;
+          throw err;
+        }
         console.warn(`[Switch API] Status ${response.status} dengan respon non-JSON. Mencoba beralih ke Mock.`);
         localStorage.setItem("attendance_fallback_active", "true");
         return mockFetch(endpoint, options);
@@ -958,6 +970,10 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     localStorage.removeItem("attendance_fallback_active");
     return jsonResult;
   } catch (err: any) {
+    // If it was a client validation/auth error, directly propagate the error
+    if (err.isClientError) {
+      throw err;
+    }
     // If it's a connection / network error, or JSON parsing error (e.g. from html response),
     // transparently fall back to client-side localStorage mock DB
     console.warn(`[Switch API] Gagal memproses request backend (${err.message}). Menjalankan fallback database lokal (Mock).`);
