@@ -1126,6 +1126,81 @@ app.post("/api/attendance/manual", authenticateToken, requireAdmin, async (req: 
   }
 });
 
+// Update an attendance record
+app.put("/api/attendance/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+  const { id } = req.params;
+  const { date, status, notes, jamMasuk, jamPulang } = req.body;
+  if (!status) {
+    return res.status(400).json({ error: "Status kehadiran wajib diisi." });
+  }
+  try {
+    const existing = await prisma.attendance.findUnique({
+      where: { id },
+      include: { guru: true }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Data absensi tidak ditemukan." });
+    }
+
+    const formatTime = (t: string | null | undefined) => {
+      if (!t || t.trim() === "") return null;
+      if (t.length === 5) return `${t}:00`;
+      return t;
+    };
+
+    const finalJamMasuk = formatTime(jamMasuk);
+    const finalJamPulang = formatTime(jamPulang);
+
+    const updated = await prisma.attendance.update({
+      where: { id },
+      data: {
+        date: date || existing.date,
+        status,
+        alamat: notes !== undefined ? notes : existing.alamat,
+        jamMasuk: finalJamMasuk,
+        jamPulang: finalJamPulang,
+      }
+    });
+
+    await logActivity(
+      req.user.email,
+      "UPDATE_ATTENDANCE",
+      `Admin memperbarui data absensi tanggal ${updated.date} (${status}) untuk guru ${existing.guru?.nama || 'Unknown'}.`,
+      req.ip
+    );
+
+    res.json({ success: true, message: "Data absensi berhasil diperbarui.", data: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal memperbarui data absensi." });
+  }
+});
+
+// Delete an attendance record
+app.delete("/api/attendance/:id", authenticateToken, requireAdmin, async (req: any, res) => {
+  const { id } = req.params;
+  try {
+    const existing = await prisma.attendance.findUnique({
+      where: { id },
+      include: { guru: true }
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Data absensi tidak ditemukan." });
+    }
+    await prisma.attendance.delete({
+      where: { id }
+    });
+    await logActivity(
+      req.user.email,
+      "DELETE_ATTENDANCE",
+      `Admin menghapus data absensi tanggal ${existing.date} untuk guru ${existing.guru?.nama || 'Unknown'}.`,
+      req.ip
+    );
+    res.json({ success: true, message: "Data absensi berhasil dihapus." });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menghapus data absensi." });
+  }
+});
+
 // --- DASHBOARD STATISTICS ENDPOINTS ---
 
 app.get("/api/stats/admin", authenticateToken, requireAdmin, async (req, res) => {

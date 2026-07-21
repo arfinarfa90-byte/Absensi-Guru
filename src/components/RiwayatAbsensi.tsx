@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Plus,
   X,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 
 interface RiwayatAbsensiProps {
@@ -37,6 +39,10 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
 
   // Manual Attendance Modal
   const [showManualModal, setShowManualModal] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+
   const [manualData, setManualData] = useState({
     guruId: "",
     date: new Date().toISOString().split("T")[0],
@@ -55,7 +61,41 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
       jamMasuk: "",
       jamPulang: "",
     });
+    setEditId(null);
     setShowManualModal(true);
+  };
+
+  const handleEditClick = (log: any) => {
+    setManualData({
+      guruId: log.guruId,
+      date: log.date,
+      status: log.status,
+      notes: log.alamat || "",
+      jamMasuk: log.jamMasuk ? log.jamMasuk.substring(0, 5) : "",
+      jamPulang: log.jamPulang ? log.jamPulang.substring(0, 5) : "",
+    });
+    setEditId(log.id);
+    setShowManualModal(true);
+  };
+
+  const handleDeleteClick = (log: any) => {
+    setDeleteTarget(log);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/attendance/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      onSuccessToast("Presensi berhasil dihapus.");
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
+      loadLogsAndGurus();
+    } catch (err: any) {
+      alert(err.message || "Gagal menghapus presensi.");
+    }
   };
 
   const loadLogsAndGurus = async () => {
@@ -99,15 +139,32 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
       return;
     }
     try {
-      await apiFetch("/attendance/manual", {
-        method: "POST",
-        body: JSON.stringify(manualData),
-      });
-      onSuccessToast("Presensi manual berhasil dicatat.");
+      if (editId) {
+        // Edit Mode
+        await apiFetch(`/attendance/${editId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            date: manualData.date,
+            status: manualData.status,
+            notes: manualData.notes,
+            jamMasuk: manualData.jamMasuk,
+            jamPulang: manualData.jamPulang,
+          }),
+        });
+        onSuccessToast("Presensi berhasil diperbarui.");
+      } else {
+        // Create Mode
+        await apiFetch("/attendance/manual", {
+          method: "POST",
+          body: JSON.stringify(manualData),
+        });
+        onSuccessToast("Presensi manual berhasil dicatat.");
+      }
       setShowManualModal(false);
+      setEditId(null);
       loadLogsAndGurus();
     } catch (err: any) {
-      alert(err.message || "Gagal mencatat presensi manual.");
+      alert(err.message || "Gagal menyimpan presensi.");
     }
   };
 
@@ -351,19 +408,20 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                 <th className="py-3 px-4">Jam Pulang</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 print:hidden">Alamat/Lokasi</th>
+                <th className="py-3 px-4 print:hidden text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-850 text-slate-300 print:divide-slate-200 print:text-slate-900">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     <RefreshCw className="w-8 h-8 animate-spin mx-auto text-teal-400 mb-2" />
                     Memuat riwayat presensi...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
                     Tidak ada log kehadiran guru yang terekam untuk kriteria pencarian ini.
                   </td>
                 </tr>
@@ -391,6 +449,24 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                     <td className="py-3.5 px-4 text-slate-400 print:hidden max-w-[200px] truncate" title={log.alamat}>
                       {log.alamat || "Presensi Otomatis"}
                     </td>
+                    <td className="py-3.5 px-4 print:hidden text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={() => handleEditClick(log)}
+                          className="p-1.5 text-teal-400 hover:text-teal-300 hover:bg-teal-500/10 rounded-lg transition"
+                          title="Ubah Presensi"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(log)}
+                          className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition"
+                          title="Hapus Presensi"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -404,9 +480,14 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-scale-up">
             <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
-              <h3 className="font-semibold text-white text-base">Presensi Manual Guru</h3>
+              <h3 className="font-semibold text-white text-base">
+                {editId ? "Ubah Presensi Guru" : "Presensi Manual Guru"}
+              </h3>
               <button
-                onClick={() => setShowManualModal(false)}
+                onClick={() => {
+                  setShowManualModal(false);
+                  setEditId(null);
+                }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-5 h-5" />
@@ -418,9 +499,10 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                 <label className="text-[11px] font-bold text-slate-400 uppercase">Pilih Guru</label>
                 <select
                   required
+                  disabled={!!editId}
                   value={manualData.guruId}
                   onChange={(e) => setManualData({ ...manualData, guruId: e.target.value })}
-                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none"
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none disabled:opacity-50"
                 >
                   <option value="">-- Pilih Guru --</option>
                   {gurus.map((g) => (
@@ -436,9 +518,10 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                 <input
                   type="date"
                   required
+                  disabled={!!editId}
                   value={manualData.date}
                   onChange={(e) => setManualData({ ...manualData, date: e.target.value })}
-                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none"
+                  className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white focus:outline-none disabled:opacity-50"
                 />
               </div>
 
@@ -499,7 +582,10 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
               <div className="flex justify-end pt-4 gap-2 border-t border-slate-800">
                 <button
                   type="button"
-                  onClick={() => setShowManualModal(false)}
+                  onClick={() => {
+                    setShowManualModal(false);
+                    setEditId(null);
+                  }}
                   className="px-4 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-medium"
                 >
                   Batal
@@ -508,10 +594,59 @@ export default function RiwayatAbsensi({ onSuccessToast }: RiwayatAbsensiProps) 
                   type="submit"
                   className="px-4 py-2 bg-gradient-to-r from-teal-400 to-indigo-500 hover:from-teal-500 hover:to-indigo-600 text-slate-950 rounded-xl text-xs font-bold shadow"
                 >
-                  Catat Kehadiran
+                  {editId ? "Simpan Perubahan" : "Catat Kehadiran"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-40 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-scale-up">
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/40">
+              <h3 className="font-semibold text-white text-base">Hapus Presensi</h3>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteTarget(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Apakah Anda yakin ingin menghapus data presensi untuk <span className="font-semibold text-white">{deleteTarget?.guru?.nama || "guru ini"}</span> pada tanggal <span className="font-semibold text-white">{deleteTarget?.date ? new Date(deleteTarget.date).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>?
+              </p>
+              <p className="text-[11px] text-rose-400 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20">
+                Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+
+            <div className="p-5 bg-slate-950/20 border-t border-slate-800 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteTarget(null);
+                }}
+                className="px-4 py-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-slate-300 rounded-xl text-xs font-medium"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold shadow transition"
+              >
+                Hapus
+              </button>
+            </div>
           </div>
         </div>
       )}

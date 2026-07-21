@@ -499,6 +499,44 @@ export async function mockFetch(endpoint: string, options: RequestInit = {}) {
     }
   }
 
+  // Handle specific attendance actions (Delete/Edit)
+  if (path.startsWith("/attendance/")) {
+    const parts = path.split("/");
+    const id = parts[2];
+
+    if (id && id !== "manual" && id !== "submit") {
+      const list = getTable("_mock_attendances");
+      const idx = list.findIndex((x: any) => x.id === id);
+
+      if (method === "DELETE") {
+        if (idx > -1) {
+          list.splice(idx, 1);
+          saveTable("_mock_attendances", list);
+          return { success: true, message: "Data absensi berhasil dihapus." };
+        }
+        throw new Error("Data absensi tidak ditemukan.");
+      }
+
+      if (method === "PUT") {
+        if (idx > -1) {
+          const { date, status, notes, jamMasuk, jamPulang } = body;
+          list[idx] = {
+            ...list[idx],
+            date: date || list[idx].date,
+            status: status || list[idx].status,
+            alamat: notes !== undefined ? notes : list[idx].alamat,
+            jamMasuk: jamMasuk !== undefined ? jamMasuk : list[idx].jamMasuk,
+            jamPulang: jamPulang !== undefined ? jamPulang : list[idx].jamPulang,
+            updatedAt: new Date().toISOString()
+          };
+          saveTable("_mock_attendances", list);
+          return { success: true, message: "Data absensi berhasil diperbarui.", data: list[idx] };
+        }
+        throw new Error("Data absensi tidak ditemukan.");
+      }
+    }
+  }
+
   // Manual Attendance Create
   if (path === "/attendance/manual" && method === "POST") {
     const { guruId, date, status, jamMasuk, jamPulang, keterangan, notes } = body;
